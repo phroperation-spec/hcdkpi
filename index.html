@@ -530,14 +530,15 @@ function uid(){ return 'e' + Math.random().toString(36).slice(2,10); }
    Leave FIREBASE_CONFIG as null to keep working purely offline/local, as before. */
 const FIREBASE_CONFIG = null;
 /* e.g.
-const FIREBASE_CONFIG = {
-  apiKey: "AIzaSy...",
-  authDomain: "your-project.firebaseapp.com",
-  databaseURL: "https://your-project-default-rtdb.firebaseio.com",
-  projectId: "your-project",
-  storageBucket: "your-project.appspot.com",
-  messagingSenderId: "1234567890",
-  appId: "1:1234567890:web:abcdef"
+const firebaseConfig = {
+  apiKey: "AIzaSyDGMW8ii_wEjNp8JEqjetnZrxxW-uRWNY8",
+  authDomain: "hc-kpi-b3132.firebaseapp.com",
+  databaseURL: "https://hc-kpi-b3132-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "hc-kpi-b3132",
+  storageBucket: "hc-kpi-b3132.firebasestorage.app",
+  messagingSenderId: "760521344931",
+  appId: "1:760521344931:web:453644d55d8e35b945bc16",
+  measurementId: "G-FB9NB9B556"
 };
 */
 const FIREBASE_PATH = 'pgb_goal_codex'; // node under which all shared data is stored
