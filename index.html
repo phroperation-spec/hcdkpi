@@ -1,0 +1,1500 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>PGB Targets — Reference</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=Fraunces:opsz,wght@9..144,400;9..144,500;9..144,600;9..144,700&family=DM+Sans:wght@400;500;600;700&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
+<script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
+<style>
+:root{
+  --navy:#0d1f3c; --navy2:#142850; --navy3:#1a3560;
+  --paper:#f6f3ec; --card:#ffffff; --card2:#fbfaf6;
+  --border:#e4ddc9; --border2:#e2e5ec;
+  --text:#20242c; --text2:#4a5064; --text3:#8c8f9c;
+  --gold:#c8991a; --gold2:#e0b23c;
+  --l1:#b3452e; --l2:#c9762f; --l3:#c99a2f; --l4:#5f8f4e; --l5:#2a7a52;
+  --blue:#2f5fa8; --blue2:#e7f0fc; --blue3:#bcd3f0;
+  --radius:12px; --radius-sm:8px;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  font-family:'DM Sans',sans-serif; background:var(--paper); color:var(--text);
+  min-height:100vh; -webkit-font-smoothing:antialiased;
+}
+::-webkit-scrollbar{width:9px;height:9px;}
+::-webkit-scrollbar-thumb{background:#d8d0b8;border-radius:6px;}
+
+/* ---------- Header ---------- */
+.masthead{
+  background:var(--navy); color:#fff; padding:26px 36px 22px;
+  border-bottom:4px solid var(--gold);
+  position:sticky; top:0; z-index:50;
+}
+.masthead-inner{max-width:1280px;margin:0 auto;display:flex;align-items:flex-end;justify-content:space-between;gap:20px;flex-wrap:wrap;}
+.masthead-title{display:flex;align-items:baseline;gap:14px;flex-wrap:wrap;}
+.masthead-title .kicker{font-family:'JetBrains Mono',monospace;font-size:.68em;letter-spacing:.18em;text-transform:uppercase;color:var(--gold2);}
+.masthead-title h1{font-family:'Fraunces',serif;font-weight:600;font-size:2.05em;margin:2px 0 0;letter-spacing:-.01em;}
+.masthead-title h1 em{font-style:italic;font-weight:400;color:var(--gold2);}
+.masthead-sub{font-size:.85em;color:#c3cbe0;max-width:520px;line-height:1.5;}
+.masthead-actions{display:flex;gap:8px;flex-wrap:wrap;}
+.masthead-right{display:flex;align-items:flex-end;gap:14px;flex-wrap:wrap;}
+.ratee-inline{display:flex;align-items:center;gap:8px;margin-top:8px;flex-wrap:wrap;}
+.ratee-inline-label{font-family:'JetBrains Mono',monospace;font-size:.64em;letter-spacing:.1em;text-transform:uppercase;color:var(--blue);font-weight:700;white-space:nowrap;}
+.ratee-inline-input{
+  border:none;border-bottom:1.5px solid var(--blue3);background:transparent;padding:3px 4px;
+  font-family:'DM Sans',sans-serif;font-size:.92em;color:var(--text);min-width:240px;
+}
+.ratee-inline-input:focus{outline:none;border-bottom-color:var(--blue);}
+.mbtn{
+  font-family:'DM Sans',sans-serif;font-size:.78em;font-weight:700;letter-spacing:.02em;
+  padding:9px 15px;border-radius:7px;border:1px solid rgba(255,255,255,.22);
+  background:rgba(255,255,255,.06);color:#f2f4fa;cursor:pointer;transition:.15s;
+  display:inline-flex;align-items:center;gap:6px;white-space:nowrap;
+}
+.mbtn:hover{background:rgba(255,255,255,.14);border-color:rgba(255,255,255,.4);}
+.mbtn.primary{background:var(--gold);border-color:var(--gold);color:var(--navy);}
+.mbtn.primary:hover{background:var(--gold2);}
+input[type=file]{display:none;}
+
+/* ---------- Layout ---------- */
+.layout{max-width:1280px;margin:0 auto;padding:26px 36px 70px;display:grid;grid-template-columns:280px 1fr;gap:26px;}
+@media (max-width:900px){.layout{grid-template-columns:1fr;}}
+
+/* ---------- Filter rail ---------- */
+.rail{position:sticky;top:128px;align-self:start;display:flex;flex-direction:column;gap:18px;}
+.rail-card{background:var(--card);border:1px solid var(--border);border-radius:var(--radius);padding:18px 18px 20px;}
+.rail-label{font-family:'JetBrains Mono',monospace;font-size:.64em;letter-spacing:.13em;text-transform:uppercase;color:var(--text3);margin-bottom:7px;display:block;}
+.rail-select{
+  width:100%;padding:10px 11px;border:1px solid var(--border2);border-radius:7px;
+  background:var(--card2);font-family:'DM Sans',sans-serif;font-size:.87em;color:var(--text);
+  margin-bottom:14px;cursor:pointer;
+}
+.rail-select:last-child{margin-bottom:0;}
+.rail-select:disabled{opacity:.55;cursor:not-allowed;}
+.rail-search{
+  width:100%;padding:10px 11px;border:1px solid var(--border2);border-radius:7px;
+  background:var(--card2);font-family:'DM Sans',sans-serif;font-size:.87em;color:var(--text);
+}
+
+/* ---------- Main content ---------- */
+.main-head{display:flex;justify-content:space-between;align-items:flex-end;margin-bottom:18px;flex-wrap:wrap;gap:10px;}
+.main-head h2{font-family:'Fraunces',serif;font-weight:600;font-size:1.3em;margin:0;color:var(--navy);}
+.main-head .count{font-size:.78em;color:var(--text3);}
+
+.empty-state{
+  background:var(--card);border:1px dashed var(--border);border-radius:var(--radius);
+  padding:60px 30px;text-align:center;color:var(--text3);
+}
+.empty-state h3{font-family:'Fraunces',serif;font-size:1.2em;color:var(--navy2);margin-bottom:6px;}
+.empty-state .mbtn{margin-top:16px;background:var(--navy);border-color:var(--navy);color:#fff;}
+.empty-state .mbtn:hover{background:var(--navy2);}
+
+.goal-section{margin-bottom:34px;}
+.goal-section-head{display:flex;align-items:center;gap:12px;margin-bottom:14px;}
+.goal-chip{
+  font-family:'JetBrains Mono',monospace;font-size:.62em;letter-spacing:.1em;text-transform:uppercase;
+  background:var(--navy);color:#f2d98a;padding:5px 10px;border-radius:5px;
+}
+.goal-section-head h3{font-family:'Fraunces',serif;font-weight:600;font-size:1.22em;margin:0;color:var(--navy);}
+.goal-section-head .line{flex:1;height:1px;background:linear-gradient(90deg,var(--border),transparent);}
+
+.entry-card{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:20px 22px 18px;margin-bottom:16px;
+}
+.entry-top{display:flex;justify-content:space-between;gap:16px;flex-wrap:wrap;margin-bottom:12px;}
+.entry-actions{display:flex;gap:6px;flex-shrink:0;}
+.entry-actions button{
+  font-size:.68em;font-weight:700;padding:4px 10px;border-radius:6px;border:1px solid var(--border2);
+  background:var(--card2);color:var(--text2);cursor:pointer;white-space:nowrap;
+}
+.entry-actions button:hover{border-color:var(--gold2);color:var(--navy);}
+.entry-actions button.del:hover{border-color:var(--l1);color:var(--l1);}
+.entry-tags{display:flex;gap:6px;flex-wrap:wrap;}
+.tag{
+  font-size:.68em;font-weight:600;padding:4px 9px;border-radius:20px;
+  background:var(--card2);border:1px solid var(--border2);color:var(--text2);white-space:nowrap;
+}
+.tag.co{color:var(--navy2);border-color:#cdd6ee;background:#eef1fb;}
+.tag.wt{color:var(--navy);border-color:var(--gold2);background:#fbf3dc;font-weight:700;}
+.entry-kpi{font-size:.72em;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--text3);}
+
+.entry-deliverable{
+  font-family:'Fraunces',serif;font-size:1.02em;line-height:1.5;color:var(--text);
+  margin:2px 0 16px;padding-left:14px;border-left:3px solid var(--gold2);
+}
+.target-hover{position:relative;cursor:help;}
+.hover-hint{
+  display:block;font-family:'DM Sans',sans-serif;font-size:.62em;letter-spacing:.04em;text-transform:uppercase;
+  color:var(--text3);margin-top:5px;font-weight:600;
+}
+.rubric-tooltip{
+  display:none;position:absolute;top:100%;left:0;right:0;margin-top:8px;z-index:60;
+  background:var(--card);border:1px solid var(--border);border-radius:10px;
+  padding:14px 16px;box-shadow:0 16px 36px rgba(13,31,60,.22);
+}
+.target-hover:hover .rubric-tooltip,
+.target-hover:focus .rubric-tooltip,
+.target-hover.open .rubric-tooltip{display:block;}
+.rubric-tooltip-title{
+  font-family:'JetBrains Mono',monospace;font-size:.66em;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--text3);margin-bottom:10px;
+}
+.rt-row{padding:8px 0;border-top:1px solid var(--border2);}
+.rt-row:first-of-type{border-top:none;}
+.rt-lvl{font-family:'DM Sans',sans-serif;font-weight:700;font-size:15px;color:var(--c);margin-bottom:3px;}
+.rt-txt{font-family:'DM Sans',sans-serif;font-size:15px;line-height:1.5;color:var(--text2);}
+@media (max-width:600px){ .rubric-tooltip{left:0;right:0;} }
+
+/* rubric gauge */
+.rubric-gauge{display:flex;align-items:center;gap:0;margin-bottom:2px;}
+.rubric-gauge .seg{flex:1;height:6px;position:relative;}
+.rubric-gauge .seg:not(:last-child){margin-right:3px;}
+.rubric-gauge .dot{
+  width:9px;height:9px;border-radius:50%;position:absolute;top:-1.5px;
+  border:2px solid var(--card);
+}
+.rubric-label-row{display:grid;grid-template-columns:repeat(5,1fr);gap:3px;margin-bottom:8px;}
+.rlbl{font-size:.62em;font-weight:700;text-align:center;letter-spacing:.03em;text-transform:uppercase;padding-top:4px;}
+.rubric-grid{display:grid;grid-template-columns:repeat(5,1fr);gap:8px;}
+.rcell{
+  border-radius:8px;padding:9px 10px 10px;font-size:.76em;line-height:1.45;color:var(--text2);
+  background:var(--card2);border:1px solid var(--border2);border-top:3px solid var(--c);
+  min-height:64px;
+}
+.rcell .rn{font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.82em;color:var(--c);display:block;margin-bottom:3px;}
+@media (max-width:760px){.rubric-grid,.rubric-label-row{grid-template-columns:repeat(5,1fr);} .rcell{font-size:.72em;padding:7px 7px 8px;} }
+
+/* rating control */
+.rating-row{display:flex;align-items:center;gap:8px;margin:14px 0 4px;flex-wrap:wrap;}
+.rating-label{font-size:.68em;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);}
+.rating-btns{display:flex;gap:5px;}
+.rbtn{
+  width:30px;height:30px;border-radius:7px;border:1.5px solid var(--border2);background:var(--card2);
+  font-family:'JetBrains Mono',monospace;font-weight:700;font-size:.78em;color:var(--text3);
+  cursor:pointer;transition:.12s;display:flex;align-items:center;justify-content:center;
+}
+.rbtn:hover{border-color:var(--c);color:var(--c);}
+.rbtn.active{background:var(--c);border-color:var(--c);color:#fff;}
+.rating-row.readonly .rbtn{cursor:default;}
+.rating-row.readonly .rbtn:hover{border-color:var(--border2);color:var(--text3);}
+.rating-status{font-size:.78em;color:var(--text2);font-weight:600;}
+.rating-status.unrated{color:var(--text3);font-weight:400;font-style:italic;}
+
+.remarks-block{margin:12px 0 4px;}
+.remarks-label{font-size:.68em;font-weight:700;text-transform:uppercase;letter-spacing:.06em;color:var(--text3);display:block;margin-bottom:6px;}
+.remarks-input{
+  width:100%;min-height:60px;padding:9px 11px;border:1px solid var(--border2);border-radius:8px;
+  background:var(--card2);font-family:'DM Sans',sans-serif;font-size:.85em;line-height:1.5;color:var(--text);resize:vertical;
+}
+.remarks-view{
+  background:var(--card2);border:1px solid var(--border2);border-radius:8px;padding:9px 11px;
+  font-size:.85em;line-height:1.5;color:var(--text2);white-space:pre-wrap;
+}
+.remarks-view.empty{color:var(--text3);font-style:italic;}
+
+.goal-overall{
+  font-size:.76em;background:var(--card);border:1px solid var(--border);border-radius:20px;
+  padding:5px 12px;color:var(--text2);white-space:nowrap;display:inline-flex;align-items:center;gap:6px;
+}
+.goal-overall strong{font-family:'Fraunces',serif;font-size:1.1em;color:var(--navy);}
+.goal-overall.no-data{color:var(--text3);}
+.wa-badge{
+  font-size:.68em;font-weight:700;padding:4px 10px;border-radius:20px;border:1px solid;
+  white-space:nowrap;display:inline-flex;align-items:center;gap:4px;letter-spacing:.01em;
+}
+.wa-badge.wa-ok{color:var(--l5);border-color:var(--l5);background:#eaf6ef;}
+.wa-badge.wa-short{color:var(--l2);border-color:var(--l2);background:#fdf1e6;}
+.wa-badge.wa-over{color:var(--l1);border-color:var(--l1);background:#fbeae7;}
+.wa-badge.wa-none{color:var(--text3);border-color:var(--border2);background:var(--card2);}
+.goals-summary{
+  background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
+  padding:18px 22px 8px;margin-bottom:28px;
+}
+.goals-summary-title{
+  font-family:'JetBrains Mono',monospace;font-size:.66em;letter-spacing:.12em;text-transform:uppercase;
+  color:var(--text3);margin-bottom:10px;
+}
+.goals-summary-row{
+  display:flex;align-items:center;gap:14px;padding:10px 0;border-top:1px solid var(--border2);
+}
+.goals-summary-row:first-of-type{border-top:none;}
+.goals-summary-name{flex:1;font-family:'Fraunces',serif;font-size:.98em;color:var(--navy);}
+.scope-overall{
+  font-size:.78em;background:var(--navy);border:1px solid var(--navy);border-radius:20px;
+  padding:6px 14px;color:#f2f4fa;white-space:nowrap;display:inline-flex;align-items:center;gap:6px;
+}
+.scope-overall strong{font-family:'Fraunces',serif;font-size:1.15em;color:var(--gold2);}
+.scope-overall.no-data{background:var(--card);border-color:var(--border);color:var(--text3);}
+/* directory manager */
+.dir-breadcrumb{display:flex;align-items:center;gap:8px;font-size:.8em;color:var(--text2);margin-bottom:14px;flex-wrap:wrap;}
+.dir-breadcrumb .crumb{cursor:pointer;color:var(--navy2);font-weight:600;}
+.dir-breadcrumb .crumb:hover{text-decoration:underline;}
+.dir-breadcrumb .sep{color:var(--text3);}
+.dir-list{display:flex;flex-direction:column;gap:7px;margin-bottom:16px;}
+.dir-row{
+  display:flex;align-items:center;gap:8px;background:var(--card2);border:1px solid var(--border2);
+  border-radius:8px;padding:8px 10px;
+}
+.dir-row input{
+  flex:1;border:none;background:transparent;font-family:'DM Sans',sans-serif;font-size:.86em;color:var(--text);
+  padding:3px 4px;border-radius:5px;
+}
+.dir-row input:focus{background:#fff;outline:1px solid var(--gold2);}
+.dir-row button{
+  font-size:.7em;font-weight:700;padding:5px 9px;border-radius:6px;border:1px solid var(--border2);
+  background:#fff;color:var(--text2);cursor:pointer;white-space:nowrap;flex-shrink:0;
+}
+.dir-row button:hover{border-color:var(--gold2);color:var(--navy);}
+.dir-row button.del:hover{border-color:var(--l1);color:var(--l1);}
+.dir-row button.drill{background:var(--navy);border-color:var(--navy);color:#fff;}
+.dir-row button.drill:hover{background:var(--navy2);}
+.dir-row button.move{padding:5px 8px;font-family:'JetBrains Mono',monospace;}
+.dir-row button.move:disabled{opacity:.3;cursor:not-allowed;}
+.dir-row button.move:disabled:hover{border-color:var(--border2);color:var(--text2);}
+.dir-empty{font-size:.82em;color:var(--text3);font-style:italic;padding:10px 2px;}
+.dir-add-row{display:flex;gap:8px;}
+.dir-add-row input{
+  flex:1;padding:9px 11px;border:1px solid var(--border2);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:.87em;background:var(--card2);
+}
+.dir-add-row button{
+  background:var(--navy);color:#fff;border:none;border-radius:7px;padding:0 16px;font-size:.82em;font-weight:700;cursor:pointer;
+}
+.dir-add-row button:hover{background:var(--navy2);}
+
+.modal-overlay{display:none;position:fixed;inset:0;background:rgba(13,31,60,.55);z-index:200;align-items:center;justify-content:center;padding:20px;}
+.modal-overlay.show{display:flex;}
+.modal-box{background:#fff;border-radius:14px;max-width:640px;width:100%;max-height:88vh;overflow-y:auto;box-shadow:0 30px 70px rgba(0,0,0,.35);}
+.modal-head{padding:20px 24px;border-bottom:1px solid var(--border2);display:flex;justify-content:space-between;align-items:center;}
+.modal-head h3{font-family:'Fraunces',serif;font-size:1.15em;margin:0;color:var(--navy);}
+.modal-close{background:none;border:none;font-size:1.2em;cursor:pointer;color:var(--text3);}
+.modal-body{padding:20px 24px;}
+.form-row{margin-bottom:13px;}
+.form-row label{display:block;font-size:.72em;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin-bottom:5px;}
+.form-row input,.form-row textarea,.form-row select{
+  width:100%;padding:9px 11px;border:1px solid var(--border2);border-radius:7px;font-family:'DM Sans',sans-serif;font-size:.87em;background:var(--card2);
+}
+.form-grid2{display:grid;grid-template-columns:1fr 1fr;gap:12px;}
+.form-grid5{display:grid;grid-template-columns:1fr;gap:8px;}
+.modal-foot{padding:16px 24px;border-top:1px solid var(--border2);display:flex;justify-content:flex-end;gap:8px;}
+.drop-zone{
+  border:2px dashed var(--border2);border-radius:10px;padding:26px;text-align:center;color:var(--text3);
+  font-size:.85em;margin-bottom:14px;cursor:pointer;transition:.15s;
+}
+.drop-zone:hover{border-color:var(--gold2);color:var(--navy2);}
+.template-note{font-size:.76em;color:var(--text3);line-height:1.6;background:var(--card2);border-radius:8px;padding:10px 12px;margin-bottom:14px;}
+.template-note code{font-family:'JetBrains Mono',monospace;font-size:.92em;background:#eee7d2;padding:1px 4px;border-radius:3px;}
+
+@media print{
+  .masthead,.rail,.mbtn,.modal-overlay{display:none !important;}
+  .layout{grid-template-columns:1fr;padding:0;}
+  body{background:#fff;}
+  .entry-card{break-inside:avoid;border:1px solid #ccc;}
+  .ratee-inline-input{border-bottom:1.5px solid #999;color:#000;}
+}
+</style>
+</head>
+<body>
+
+<div class="masthead">
+  <div class="masthead-inner">
+    <div>
+      <div class="masthead-title">
+        <span class="kicker">PGB · Performance Reference</span>
+      </div>
+      <h1>Targets</h1>
+    </div>
+    <div class="masthead-right">
+      <div class="masthead-actions">
+        <button class="mbtn" id="adminEntryBtn" onclick="openManualModal()" style="display:none;">✎ Add Entry</button>
+        <button class="mbtn" id="adminImportBtn" onclick="openImportModal()" style="display:none;">⇪ Import Excel/CSV</button>
+        <button class="mbtn" id="adminDirBtn" onclick="openDirectoryModal()" style="display:none;">🗂 Manage Directory</button>
+        <button class="mbtn" id="adminExportBtn" onclick="exportCSV()" style="display:none;">⇩ Export CSV</button>
+        <button class="mbtn" onclick="window.print()">🖨 Print View</button>
+        <button class="mbtn" onclick="saveAsPDF(event)">⬇ Save as PDF</button>
+        <button class="mbtn primary" id="adminTemplateBtn" onclick="downloadTemplate()" style="display:none;">Template</button>
+        <button class="mbtn" id="adminChangePwBtn" onclick="openChangePasscodeModal()" style="display:none;">🔑 Change Passcode</button>
+        <button class="mbtn" id="adminLockBtn" onclick="toggleAdminMode()">🔒 Admin</button>
+      </div>
+      <button class="mbtn" id="resetAllBtn" onclick="resetAllRatings()" style="background:var(--blue);border-color:var(--blue);color:#fff;">↺ Reset All Ratings</button>
+    </div>
+  </div>
+</div>
+
+<div class="layout">
+
+  <div class="rail">
+    <div class="rail-card">
+      <span class="rail-label">Business Affiliate</span>
+      <select class="rail-select" id="fCompany" onchange="onCompanyChange()"></select>
+      <span class="rail-label">Unit</span>
+      <select class="rail-select" id="fUnit" onchange="onUnitChange()"></select>
+      <span class="rail-label">Functional Group</span>
+      <select class="rail-select" id="fFunc" onchange="renderGoals()"></select>
+      <input class="rail-search" id="fSearch" placeholder="Goal, KPI, or deliverable…" oninput="renderGoals()" style="display:none;">
+    </div>
+    <div class="rail-card" id="sampleNotice" style="display:none;">
+      <span class="rail-label">Note</span>
+      <div style="font-size:.8em;color:var(--text2);line-height:1.5;">You're viewing sample entries so the layout isn't empty. Import your real goal set to replace them.</div>
+      <button class="mbtn" id="adminClearSampleBtn" style="margin-top:10px;background:var(--navy);color:#fff;border-color:var(--navy);display:none;" onclick="clearSample()">Clear sample data</button>
+    </div>
+  </div>
+
+  <div id="printArea">
+    <div class="main-head">
+      <div>
+        <h2 id="mainHeadTitle">All Deliverables</h2>
+        <div class="ratee-inline">
+          <span class="ratee-inline-label">Individual Being Rated:</span>
+          <input class="ratee-inline-input" id="fRateeName" placeholder="Employee name…" oninput="saveRateeName()">
+        </div>
+      </div>
+      <div style="display:flex;align-items:center;gap:10px;flex-wrap:wrap;">
+        <span class="count" id="mainHeadCount"></span>
+        <span id="scopeOverall"></span>
+      </div>
+    </div>
+    <div id="goalsSummary"></div>
+    <div id="content"></div>
+  </div>
+
+</div>
+
+<!-- Import Modal -->
+<div class="modal-overlay" id="importModal">
+  <div class="modal-box">
+    <div class="modal-head"><h3>Import Goals — Excel or CSV</h3><button class="modal-close" onclick="closeModal('importModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="template-note">
+        Expected columns (same as the performance system's bulk‑import template), first row = headers, first sheet only for Excel files:<br>
+        <code>Company, Business Unit, Functional Unit, Strategic Goal, KPI, Deliverable, Weight (%), Criteria L1 - Unsatisfactory, Criteria L2 - Needs Development, Criteria L3 - Meets Expectations, Criteria L4 - Exceeds Expectations, Criteria L5 - Outstanding</code>
+      </div>
+      <div class="drop-zone" id="dropZone" onclick="document.getElementById('csvFileInput').click()">
+        📄 Click to choose a .xlsx, .xls, or .csv file, or drag one here
+      </div>
+      <input type="file" id="csvFileInput" accept=".csv,.xlsx,.xls" onchange="handleImportFile(this.files[0])">
+      <div id="importStatus" style="font-size:.82em;color:var(--text2);"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn" style="background:var(--card2);color:var(--text2);border-color:var(--border2);" onclick="downloadTemplate()">Download blank template</button>
+      <button class="mbtn" style="background:var(--navy);color:#fff;border-color:var(--navy);" onclick="closeModal('importModal')">Done</button>
+    </div>
+  </div>
+</div>
+
+<!-- Manual Add Modal -->
+<div class="modal-overlay" id="manualModal">
+  <div class="modal-box">
+    <div class="modal-head"><h3 id="manualModalTitle">Add Reference Entry</h3><button class="modal-close" onclick="closeModal('manualModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="template-note" style="display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;">
+        <span>Adding several at once? Upload a spreadsheet instead of typing them in one by one.</span>
+        <button class="mbtn" style="background:var(--navy);color:#fff;border-color:var(--navy);flex-shrink:0;" onclick="closeModal('manualModal');openImportModal();">⇪ Upload Excel/CSV</button>
+      </div>
+      <div class="form-grid2">
+        <div class="form-row">
+          <label>Business Affiliate (Company)</label>
+          <select id="mCompanySelect" onchange="onManualCompanyChange()"></select>
+          <input id="mCompanyCustom" placeholder="Type new affiliate name…" style="display:none;margin-top:6px;">
+        </div>
+        <div class="form-row">
+          <label>Unit (Business Unit)</label>
+          <select id="mUnitSelect" onchange="onManualUnitChange()"></select>
+          <input id="mUnitCustom" placeholder="Type new unit name…" style="display:none;margin-top:6px;">
+        </div>
+      </div>
+      <div class="form-grid2">
+        <div class="form-row">
+          <label>Functional Group</label>
+          <select id="mFuncSelect" onchange="onManualFuncChange()"></select>
+          <input id="mFuncCustom" placeholder="Type new functional group name…" style="display:none;margin-top:6px;">
+        </div>
+        <div class="form-row"><label>Weight (%)</label><input id="mWeight" type="number" placeholder="e.g. 20"></div>
+      </div>
+      <div class="form-row"><label>Strategic Goal</label><input id="mGoal" placeholder="e.g. Operational Excellence"></div>
+      <div class="form-row"><label>KPI</label><input id="mKpi" placeholder="e.g. Cycle Time Reduction"></div>
+      <div class="form-row"><label>Deliverable</label><textarea id="mDeliverable" rows="2" placeholder="Expected deliverable description…"></textarea></div>
+      <div class="form-row"><label>Rubric — 5 Levels</label>
+        <div class="form-grid5">
+          <textarea id="mC1" rows="2" placeholder="L1 — Unsatisfactory"></textarea>
+          <textarea id="mC2" rows="2" placeholder="L2 — Needs Development"></textarea>
+          <textarea id="mC3" rows="2" placeholder="L3 — Meets Expectations"></textarea>
+          <textarea id="mC4" rows="2" placeholder="L4 — Exceeds Expectations"></textarea>
+          <textarea id="mC5" rows="2" placeholder="L5 — Outstanding"></textarea>
+        </div>
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn" style="background:var(--card2);color:var(--text2);border-color:var(--border2);" onclick="closeModal('manualModal')">Cancel</button>
+      <button class="mbtn" style="background:var(--navy);color:#fff;border-color:var(--navy);" id="manualSaveBtn" onclick="saveManualEntry()">Save Entry</button>
+    </div>
+  </div>
+</div>
+
+<!-- Admin Unlock Modal -->
+<div class="modal-overlay" id="adminModal">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-head"><h3>Admin Access</h3><button class="modal-close" onclick="closeModal('adminModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>Passcode</label>
+        <input id="adminPasscodeInput" type="password" placeholder="Enter admin passcode" onkeydown="if(event.key==='Enter')submitAdminPasscode()">
+      </div>
+      <div id="adminError" style="font-size:.8em;color:var(--l1);display:none;">Incorrect passcode.</div>
+      <div style="font-size:.76em;color:var(--text3);line-height:1.55;margin-top:8px;">Admin access lets you add entries or import Excel/CSV files. Everyone else can browse, filter, and print only.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn" style="background:var(--card2);color:var(--text2);border-color:var(--border2);" onclick="closeModal('adminModal')">Cancel</button>
+      <button class="mbtn" style="background:var(--navy);color:#fff;border-color:var(--navy);" onclick="submitAdminPasscode()">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Passcode Modal -->
+<div class="modal-overlay" id="changePasscodeModal">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-head"><h3>Change Admin Passcode</h3><button class="modal-close" onclick="closeModal('changePasscodeModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row"><label>Current Passcode</label><input id="cpCurrent" type="password" placeholder="Current passcode"></div>
+      <div class="form-row"><label>New Passcode</label><input id="cpNew" type="password" placeholder="At least 4 characters"></div>
+      <div class="form-row"><label>Confirm New Passcode</label><input id="cpConfirm" type="password" placeholder="Re-enter new passcode" onkeydown="if(event.key==='Enter')submitChangePasscode()"></div>
+      <div id="cpError" style="font-size:.8em;color:var(--l1);display:none;"></div>
+      <div id="cpSuccess" style="font-size:.8em;color:var(--l5);font-weight:600;display:none;"></div>
+      <div style="font-size:.76em;color:var(--text3);line-height:1.55;margin-top:8px;">This changes the passcode stored in this browser. If other supervisors unlock admin mode from a different device or browser, share the new passcode with them separately.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn" style="background:var(--card2);color:var(--text2);border-color:var(--border2);" onclick="closeModal('changePasscodeModal')">Close</button>
+      <button class="mbtn" style="background:var(--navy);color:#fff;border-color:var(--navy);" onclick="submitChangePasscode()">Save New Passcode</button>
+    </div>
+  </div>
+</div>
+
+<!-- Directory Manager Modal -->
+<div class="modal-overlay" id="directoryModal">
+  <div class="modal-box" style="max-width:560px;">
+    <div class="modal-head"><h3>Manage Directory</h3><button class="modal-close" onclick="closeModal('directoryModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="dir-breadcrumb" id="dirBreadcrumb"></div>
+      <div class="dir-list" id="dirList"></div>
+      <div class="dir-add-row">
+        <input type="text" id="dirAddInput" placeholder="Add new…" onkeydown="if(event.key==='Enter')dirAddItem()">
+        <button onclick="dirAddItem()">Add</button>
+      </div>
+      <div style="font-size:.74em;color:var(--text3);line-height:1.55;margin-top:14px;padding-top:12px;border-top:1px dashed var(--border);">
+        This list controls what shows up in the Business Affiliate, Unit, and Functional Group filters. Renaming here also updates matching entries automatically; deleting only removes the option from this list — existing entries keep their values.
+      </div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn" style="background:var(--navy);color:#fff;border-color:var(--navy);" onclick="closeModal('directoryModal')">Done</button>
+    </div>
+  </div>
+</div>
+
+<script>
+const STORAGE_KEY = 'pgb_goal_codex_v1';
+const ADMIN_SESSION_KEY = 'pgb_goal_codex_admin';
+const ADMIN_PASSCODE_KEY = 'pgb_goal_codex_admin_pw';
+const DEFAULT_ADMIN_PASSCODE = 'PGBadmin2026'; // only used until an admin sets their own passcode
+const RUBRIC_LABELS = ['Unsatisfactory','Needs Development','Meets Expectations','Exceeds Expectations','Outstanding'];
+const RUBRIC_COLORS = ['var(--l1)','var(--l2)','var(--l3)','var(--l4)','var(--l5)'];
+const CSV_HEADERS = ['Company','Business Unit','Functional Unit','Strategic Goal','KPI','Deliverable','Weight (%)','Criteria L1 - Unsatisfactory','Criteria L2 - Needs Development','Criteria L3 - Meets Expectations','Criteria L4 - Exceeds Expectations','Criteria L5 - Outstanding'];
+
+let entries = [];
+let usingSample = false;
+
+const SAMPLE_ENTRIES = [
+  {company:'PGB Construction & Manufacturing', businessUnit:'Project Delivery', functionalUnit:'Site Engineering', strategicGoal:'Operational Excellence', kpi:'On-Time Milestone Completion', deliverable:'Deliver assigned project milestones per the approved schedule, with variances flagged and mitigated before they cascade.', weight:25, c:['Consistently misses milestones with no escalation or mitigation plan.','Frequent delays; mitigation plans are reactive rather than proactive.','Meets scheduled milestones with occasional, well-managed variances.','Consistently ahead of schedule with proactive risk mitigation.','Sets the benchmark — schedule performance and mitigation practices adopted as standard across sites.']},
+  {company:'PGB Construction & Manufacturing', businessUnit:'Project Delivery', functionalUnit:'Site Engineering', strategicGoal:'Financial Stewardship', kpi:'Budget Variance Control', deliverable:'Keep project cost variance within approved thresholds and report deviations with corrective action within 5 working days.', weight:20, c:['Cost overruns exceed 15% with no reporting.','Overruns of 8-15%, reporting delayed beyond 10 days.','Variance within ±5%, reported on time.','Variance within ±2%, with documented cost-saving initiatives.','Delivers under budget while improving quality — practice becomes a reference case for other sites.']},
+  {company:'PGB Human Capital', businessUnit:'HR Shared Services', functionalUnit:'Talent Acquisition', strategicGoal:'Talent Development', kpi:'Time-to-Fill', deliverable:'Fill approved manpower requisitions within the target hiring cycle while maintaining candidate quality standards.', weight:20, c:['Average time-to-fill exceeds target by more than 50%.','Exceeds target by 20-50%; pipeline visibility is weak.','Meets target time-to-fill for most requisitions.','Consistently beats target with strong candidate quality scores.','Redesigns sourcing practices that measurably cut cycle time org-wide.']},
+  {company:'PGB Human Capital', businessUnit:'HR Shared Services', functionalUnit:'Learning & Development', strategicGoal:'Talent Development', kpi:'Training Completion Rate', deliverable:'Ensure assigned learning programs are completed by target population within the cycle, with post-training assessment scores tracked.', weight:15, c:['Completion rate below 50%; no assessment tracking.','Completion 50-70%; inconsistent tracking.','Completion 80%+, assessments tracked as required.','Completion 90%+, with measurable skill uplift evidenced.','Program redesigned based on results, adopted as a company-wide model.']},
+  {company:'PGB Port Logistics & Shipping', businessUnit:'Terminal Operations', functionalUnit:'Yard Planning', strategicGoal:'Customer Centricity', kpi:'Vessel Turnaround Time', deliverable:'Plan yard and berth allocation to keep vessel turnaround within service-level commitments to shipping lines.', weight:22, c:['Turnaround consistently breaches SLA, with client complaints.','Frequent SLA breaches; limited corrective response.','Meets SLA for the majority of vessel calls.','Beats SLA consistently with proactive client communication.','Sets new SLA benchmarks adopted terminal-wide; cited in client reviews.']},
+  {company:'PGB Real Estate & Property Management', businessUnit:'Property Management', functionalUnit:'Facilities & Maintenance', strategicGoal:'Operational Excellence', kpi:'Preventive Maintenance Compliance', deliverable:'Execute the preventive maintenance schedule across managed properties with documented completion and tenant impact minimized.', weight:18, c:['PM schedule compliance below 60%; frequent unplanned breakdowns.','Compliance 60-80%; documentation incomplete.','Compliance 90%+ with proper documentation.','Compliance 95%+, breakdowns trend downward quarter over quarter.','Zero unplanned downtime; PM approach referenced across property portfolio.']}
+];
+
+function uid(){ return 'e' + Math.random().toString(36).slice(2,10); }
+
+/* ---------- Admin mode (view vs. add/import) ---------- */
+function isAdmin(){ return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true'; }
+
+function getAdminPasscode(){ return localStorage.getItem(ADMIN_PASSCODE_KEY) || DEFAULT_ADMIN_PASSCODE; }
+function setAdminPasscode(pw){ localStorage.setItem(ADMIN_PASSCODE_KEY, pw); }
+
+function applyAdminUI(){
+  const admin = isAdmin();
+  document.getElementById('adminEntryBtn').style.display = admin ? 'inline-flex' : 'none';
+  document.getElementById('adminImportBtn').style.display = admin ? 'inline-flex' : 'none';
+  document.getElementById('adminDirBtn').style.display = admin ? 'inline-flex' : 'none';
+  document.getElementById('adminTemplateBtn').style.display = admin ? 'inline-flex' : 'none';
+  document.getElementById('adminClearSampleBtn').style.display = admin ? 'inline-flex' : 'none';
+  document.getElementById('adminChangePwBtn').style.display = admin ? 'inline-flex' : 'none';
+  document.getElementById('adminExportBtn').style.display = admin ? 'inline-flex' : 'none';
+  const lockBtn = document.getElementById('adminLockBtn');
+  lockBtn.textContent = admin ? '🔓 Lock' : '🔒 Admin';
+  populateFilters();
+  renderGoals();
+}
+
+function toggleAdminMode(){
+  if (isAdmin()){
+    sessionStorage.removeItem(ADMIN_SESSION_KEY);
+    applyAdminUI();
+  } else {
+    document.getElementById('adminPasscodeInput').value = '';
+    document.getElementById('adminError').style.display = 'none';
+    document.getElementById('adminModal').classList.add('show');
+    setTimeout(()=>document.getElementById('adminPasscodeInput').focus(), 50);
+  }
+}
+
+function submitAdminPasscode(){
+  const val = document.getElementById('adminPasscodeInput').value;
+  if (val === getAdminPasscode()){
+    sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
+    closeModal('adminModal');
+    applyAdminUI();
+  } else {
+    document.getElementById('adminError').style.display = 'block';
+  }
+}
+
+function openChangePasscodeModal(){
+  if (!isAdmin()) return;
+  ['cpCurrent','cpNew','cpConfirm'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('cpError').style.display = 'none';
+  document.getElementById('cpSuccess').style.display = 'none';
+  document.getElementById('changePasscodeModal').classList.add('show');
+}
+
+function submitChangePasscode(){
+  if (!isAdmin()) return;
+  const cur = document.getElementById('cpCurrent').value;
+  const next = document.getElementById('cpNew').value;
+  const confirm = document.getElementById('cpConfirm').value;
+  const errEl = document.getElementById('cpError');
+  const okEl = document.getElementById('cpSuccess');
+  errEl.style.display = 'none'; okEl.style.display = 'none';
+  if (cur !== getAdminPasscode()){ errEl.textContent = 'Current passcode is incorrect.'; errEl.style.display='block'; return; }
+  if (!next || next.length < 4){ errEl.textContent = 'New passcode must be at least 4 characters.'; errEl.style.display='block'; return; }
+  if (next !== confirm){ errEl.textContent = 'New passcode and confirmation don\'t match.'; errEl.style.display='block'; return; }
+  setAdminPasscode(next);
+  okEl.textContent = '✅ Passcode updated.';
+  okEl.style.display = 'block';
+  ['cpCurrent','cpNew','cpConfirm'].forEach(id=>document.getElementById(id).value='');
+}
+
+function loadData(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
+    if (saved && Array.isArray(saved.entries) && saved.entries.length){
+      entries = saved.entries;
+      usingSample = false;
+      return;
+    }
+  }catch(e){}
+  entries = SAMPLE_ENTRIES.map(s => ({
+    id: uid(), company:s.company, businessUnit:s.businessUnit, functionalUnit:s.functionalUnit,
+    strategicGoal:s.strategicGoal, kpi:s.kpi, deliverable:s.deliverable, weight:s.weight,
+    c1:s.c[0], c2:s.c[1], c3:s.c[2], c4:s.c[3], c5:s.c[4], rating:null, remarks:''
+  }));
+  usingSample = true;
+}
+
+function persist(){
+  usingSample = false;
+  localStorage.setItem(STORAGE_KEY, JSON.stringify({entries}));
+}
+
+const RATEE_KEY = 'pgb_goal_codex_ratee_v1';
+function loadRateeName(){
+  document.getElementById('fRateeName').value = localStorage.getItem(RATEE_KEY) || '';
+}
+function saveRateeName(){
+  localStorage.setItem(RATEE_KEY, document.getElementById('fRateeName').value);
+}
+
+function clearSample(){
+  if (!isAdmin()) return;
+  entries = [];
+  usingSample = false;
+  persist();
+  populateFilters();
+  renderGoals();
+}
+
+function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+/* ---------- Directory (fixed Affiliate → Unit → Functional Group tree, admin-managed) ---------- */
+function distinctVals(list, key){
+  return [...new Set(list.map(e => e[key]).filter(Boolean))].sort((a,b)=>a.localeCompare(b));
+}
+
+const DIRECTORY_KEY = 'pgb_goal_codex_directory_v1';
+let directory = { affiliates: [] };
+let _dirLevel = 1;          // 1 = affiliates, 2 = units, 3 = functional groups, 4 = strategic goals
+let _dirAffiliate = null;   // name of affiliate currently drilled into
+let _dirUnit = null;        // name of unit currently drilled into
+let _dirFunc = null;        // name of functional group currently drilled into
+
+function defaultDirectory(){
+  const tree = {};
+  SAMPLE_ENTRIES.forEach(s=>{
+    tree[s.company] = tree[s.company] || {};
+    tree[s.company][s.businessUnit] = tree[s.company][s.businessUnit] || {};
+    const goals = tree[s.company][s.businessUnit][s.functionalUnit] = tree[s.company][s.businessUnit][s.functionalUnit] || [];
+    if (s.strategicGoal && !goals.includes(s.strategicGoal)) goals.push(s.strategicGoal);
+  });
+  return { affiliates: Object.keys(tree).map(co=>({
+    name: co,
+    units: Object.keys(tree[co]).map(u=>({
+      name: u,
+      funcGroups: Object.keys(tree[co][u]).map(f=>({ name:f, goals:[...tree[co][u][f]] }))
+    }))
+  })) };
+}
+
+function loadDirectory(){
+  try{
+    const saved = JSON.parse(localStorage.getItem(DIRECTORY_KEY)||'null');
+    if (saved && Array.isArray(saved.affiliates)){
+      // migrate older directories where funcGroups were plain strings
+      saved.affiliates.forEach(a=>a.units.forEach(u=>{
+        u.funcGroups = (u.funcGroups||[]).map(f=> typeof f==='string' ? { name:f, goals:[] } : { name:f.name, goals:f.goals||[] });
+      }));
+      directory = saved;
+      return;
+    }
+  }catch(e){}
+  directory = defaultDirectory();
+  saveDirectory();
+}
+function saveDirectory(){ localStorage.setItem(DIRECTORY_KEY, JSON.stringify(directory)); }
+
+function findAffiliate(name){ return directory.affiliates.find(a=>a.name===name) || null; }
+function findUnit(affName, unitName){ const a = findAffiliate(affName); return a ? (a.units.find(u=>u.name===unitName)||null) : null; }
+function findFuncGroup(affName, unitName, funcName){ const u = findUnit(affName, unitName); return u ? (u.funcGroups.find(f=>f.name===funcName)||null) : null; }
+
+function allAffiliateNames(){ return directory.affiliates.map(a=>a.name).sort((a,b)=>a.localeCompare(b)); }
+function allUnitNames(affName){
+  if (affName){ const a = findAffiliate(affName); return a ? a.units.map(u=>u.name).sort((x,y)=>x.localeCompare(y)) : []; }
+  const set = new Set(); directory.affiliates.forEach(a=>a.units.forEach(u=>set.add(u.name)));
+  return [...set].sort((a,b)=>a.localeCompare(b));
+}
+function allFuncNames(affName, unitName){
+  if (affName && unitName){ const u = findUnit(affName, unitName); return u ? u.funcGroups.map(f=>f.name).sort((a,b)=>a.localeCompare(b)) : []; }
+  if (affName){ const a = findAffiliate(affName); const set = new Set(); if(a) a.units.forEach(u=>u.funcGroups.forEach(f=>set.add(f.name))); return [...set].sort((a,b)=>a.localeCompare(b)); }
+  const set = new Set(); directory.affiliates.forEach(a=>a.units.forEach(u=>u.funcGroups.forEach(f=>set.add(f.name))));
+  return [...set].sort((a,b)=>a.localeCompare(b));
+}
+// Strategic Goal order is only meaningful within one fully-scoped Affiliate → Unit → Functional Group; returns the saved custom sequence (not alphabetized).
+function allGoalNames(affName, unitName, funcName){
+  const f = findFuncGroup(affName, unitName, funcName);
+  return f ? [...f.goals] : [];
+}
+// Called whenever an entry is saved/imported so the directory automatically picks up new Strategic Goals at the end of the sequence.
+function ensureDirectoryGoal(company, unit, func, goalName){
+  if (!company || !unit || !func || !goalName) return;
+  let a = findAffiliate(company);
+  if (!a){ a = { name: company, units: [] }; directory.affiliates.push(a); }
+  let u = a.units.find(x=>x.name===unit);
+  if (!u){ u = { name: unit, funcGroups: [] }; a.units.push(u); }
+  let f = u.funcGroups.find(x=>x.name===func);
+  if (!f){ f = { name: func, goals: [] }; u.funcGroups.push(f); }
+  if (!f.goals.includes(goalName)) f.goals.push(goalName);
+}
+
+/* ---------- Filters (sourced from the directory, not from entries) ---------- */
+function populateFilters(){
+  const admin = isAdmin();
+  const fCompany = document.getElementById('fCompany');
+  const prevCompany = fCompany.value;
+  const companies = allAffiliateNames();
+  const allOpt = admin ? `<option value="">All Affiliates</option>` : `<option value="" disabled ${prevCompany?'':'selected'}>Select an affiliate…</option>`;
+  fCompany.innerHTML = allOpt + companies.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  if (companies.includes(prevCompany) || (admin && prevCompany==='')) fCompany.value = prevCompany;
+  onCompanyChange(true);
+}
+
+function onCompanyChange(keepUnit){
+  const admin = isAdmin();
+  const company = document.getElementById('fCompany').value;
+  const fUnit = document.getElementById('fUnit');
+  const prevUnit = keepUnit ? fUnit.value : '';
+  const units = company ? allUnitNames(company) : (admin ? allUnitNames(null) : []);
+  const allOpt = admin ? `<option value="">All Units</option>` : `<option value="" disabled ${prevUnit?'':'selected'}>Select a unit…</option>`;
+  fUnit.innerHTML = allOpt + units.map(u=>`<option value="${esc(u)}">${esc(u)}</option>`).join('');
+  fUnit.disabled = !admin && !company;
+  if (units.includes(prevUnit) || (admin && prevUnit==='')) fUnit.value = prevUnit;
+  onUnitChange(keepUnit);
+}
+
+function onUnitChange(keepFunc){
+  const admin = isAdmin();
+  const company = document.getElementById('fCompany').value;
+  const unit = document.getElementById('fUnit').value;
+  const fFunc = document.getElementById('fFunc');
+  const prevFunc = keepFunc ? fFunc.value : '';
+  const funcs = (company && unit) ? allFuncNames(company, unit) : (admin ? allFuncNames(company || null, unit || null) : []);
+  const allOpt = admin ? `<option value="">All Functional Groups</option>` : `<option value="" disabled ${prevFunc?'':'selected'}>Select a functional group…</option>`;
+  fFunc.innerHTML = allOpt + funcs.map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join('');
+  fFunc.disabled = !admin && !(company && unit);
+  if (funcs.includes(prevFunc) || (admin && prevFunc==='')) fFunc.value = prevFunc;
+  renderGoals();
+}
+
+function selectFilterScope(company, unit, func){
+  document.getElementById('fCompany').value = company || '';
+  onCompanyChange(false);
+  if (unit){
+    document.getElementById('fUnit').value = unit;
+    onUnitChange(false);
+  }
+  if (func){
+    document.getElementById('fFunc').value = func;
+    renderGoals();
+  }
+}
+
+function getFiltered(){
+  const admin = isAdmin();
+  const company = document.getElementById('fCompany').value;
+  const unit = document.getElementById('fUnit').value;
+  const func = document.getElementById('fFunc').value;
+  if (!admin && (!company || !unit || !func)) return []; // non-admins must choose a specific affiliate, unit, and functional group — no "view all" mode
+  const q = (document.getElementById('fSearch').value||'').trim().toLowerCase();
+  return entries.filter(e=>{
+    if (company && e.company!==company) return false;
+    if (unit && e.businessUnit!==unit) return false;
+    if (func && e.functionalUnit!==func) return false;
+    if (q){
+      const hay = [e.strategicGoal,e.kpi,e.deliverable].join(' ').toLowerCase();
+      if (!hay.includes(q)) return false;
+    }
+    return true;
+  });
+}
+
+/* ---------- Directory Manager (admin CRUD on Affiliates/Units/Functional Groups/Strategic Goals) ---------- */
+function openDirectoryModal(){
+  if (!isAdmin()) return;
+  _dirLevel = 1; _dirAffiliate = null; _dirUnit = null; _dirFunc = null;
+  document.getElementById('directoryModal').classList.add('show');
+  renderDirectoryModal();
+}
+
+function dirGoTo(level){
+  if (level===1){ _dirAffiliate=null; _dirUnit=null; _dirFunc=null; }
+  if (level===2){ _dirUnit=null; _dirFunc=null; }
+  if (level===3){ _dirFunc=null; }
+  _dirLevel = level;
+  renderDirectoryModal();
+}
+
+function dirDrillUnit(affName){ _dirAffiliate = affName; _dirLevel = 2; renderDirectoryModal(); }
+function dirDrillFunc(unitName){ _dirUnit = unitName; _dirLevel = 3; renderDirectoryModal(); }
+function dirDrillGoals(funcName){ _dirFunc = funcName; _dirLevel = 4; renderDirectoryModal(); }
+
+function renderDirectoryModal(){
+  const crumb = document.getElementById('dirBreadcrumb');
+  const list = document.getElementById('dirList');
+  const addInput = document.getElementById('dirAddInput');
+
+  if (_dirLevel===1){
+    crumb.innerHTML = `<span class="crumb" style="cursor:default;color:var(--navy);">Business Affiliates</span>`;
+    addInput.placeholder = 'Add new Business Affiliate…';
+    const names = allAffiliateNames();
+    list.innerHTML = names.length ? names.map(n=>dirRowHTML(n, true)).join('') : `<div class="dir-empty">No affiliates yet — add one below.</div>`;
+  } else if (_dirLevel===2){
+    crumb.innerHTML = `<span class="crumb" onclick="dirGoTo(1)">Business Affiliates</span><span class="sep">›</span><span class="crumb" style="cursor:default;color:var(--navy);">${esc(_dirAffiliate)}</span>`;
+    addInput.placeholder = `Add new Unit under ${_dirAffiliate}…`;
+    const names = allUnitNames(_dirAffiliate);
+    list.innerHTML = names.length ? names.map(n=>dirRowHTML(n, true)).join('') : `<div class="dir-empty">No units yet under this affiliate — add one below.</div>`;
+  } else if (_dirLevel===3){
+    crumb.innerHTML = `<span class="crumb" onclick="dirGoTo(1)">Business Affiliates</span><span class="sep">›</span><span class="crumb" onclick="dirGoTo(2)">${esc(_dirAffiliate)}</span><span class="sep">›</span><span class="crumb" style="cursor:default;color:var(--navy);">${esc(_dirUnit)}</span>`;
+    addInput.placeholder = `Add new Functional Group under ${_dirUnit}…`;
+    const names = allFuncNames(_dirAffiliate, _dirUnit);
+    list.innerHTML = names.length ? names.map(n=>dirRowHTML(n, true)).join('') : `<div class="dir-empty">No functional groups yet under this unit — add one below.</div>`;
+  } else {
+    crumb.innerHTML = `<span class="crumb" onclick="dirGoTo(1)">Business Affiliates</span><span class="sep">›</span><span class="crumb" onclick="dirGoTo(2)">${esc(_dirAffiliate)}</span><span class="sep">›</span><span class="crumb" onclick="dirGoTo(3)">${esc(_dirUnit)}</span><span class="sep">›</span><span class="crumb" style="cursor:default;color:var(--navy);">${esc(_dirFunc)}</span>`;
+    addInput.placeholder = `Add new Strategic Goal under ${_dirFunc}…`;
+    const names = allGoalNames(_dirAffiliate, _dirUnit, _dirFunc); // custom sequence, not alphabetized
+    list.innerHTML = names.length ? names.map((n,i)=>dirRowHTML(n, false, true, i, names.length)).join('') : `<div class="dir-empty">No Strategic Goals yet under this functional group — add one below. Drag order using ↑ / ↓.</div>`;
+  }
+  addInput.value = '';
+}
+
+function dirRowHTML(name, drillable, movable, idx, total){
+  const label = _dirLevel===1 ? 'Manage Units →' : _dirLevel===2 ? 'Manage Groups →' : 'Manage Goals →';
+  const moveButtons = movable ? `
+    <button type="button" class="move" title="Move up" ${idx===0?'disabled':''} onclick="dirMoveGoal(${idx},-1)">↑</button>
+    <button type="button" class="move" title="Move down" ${idx===total-1?'disabled':''} onclick="dirMoveGoal(${idx},1)">↓</button>` : '';
+  return `<div class="dir-row">
+    ${moveButtons}
+    <input type="text" value="${esc(name)}" onblur="dirRenameCommit('${jsStr(name)}', this.value)" onkeydown="if(event.key==='Enter')this.blur()">
+    ${drillable ? `<button type="button" class="drill" onclick="dirDrillFromRow('${jsStr(name)}')">${label}</button>` : ''}
+    <button type="button" class="del" onclick="dirDeleteItem('${jsStr(name)}')">🗑</button>
+  </div>`;
+}
+
+function jsStr(s){ return String(s).replace(/\\/g,'\\\\').replace(/'/g,"\\'"); }
+
+function dirDrillFromRow(name){
+  if (_dirLevel===1) dirDrillUnit(name);
+  else if (_dirLevel===2) dirDrillFunc(name);
+  else if (_dirLevel===3) dirDrillGoals(name);
+}
+
+function dirMoveGoal(idx, dir){
+  if (!isAdmin()) return;
+  const f = findFuncGroup(_dirAffiliate, _dirUnit, _dirFunc);
+  if (!f) return;
+  const newIdx = idx + dir;
+  if (newIdx<0 || newIdx>=f.goals.length) return;
+  [f.goals[idx], f.goals[newIdx]] = [f.goals[newIdx], f.goals[idx]];
+  saveDirectory();
+  renderDirectoryModal();
+  renderGoals();
+}
+
+function dirAddItem(){
+  if (!isAdmin()) return;
+  const input = document.getElementById('dirAddInput');
+  const name = input.value.trim();
+  if (!name) return;
+  if (_dirLevel===1){
+    if (findAffiliate(name)){ alert('That affiliate already exists.'); return; }
+    directory.affiliates.push({ name, units: [] });
+  } else if (_dirLevel===2){
+    const a = findAffiliate(_dirAffiliate);
+    if (!a) return;
+    if (a.units.find(u=>u.name===name)){ alert('That unit already exists under this affiliate.'); return; }
+    a.units.push({ name, funcGroups: [] });
+  } else if (_dirLevel===3){
+    const u = findUnit(_dirAffiliate, _dirUnit);
+    if (!u) return;
+    if (u.funcGroups.find(f=>f.name===name)){ alert('That functional group already exists under this unit.'); return; }
+    u.funcGroups.push({ name, goals: [] });
+  } else {
+    const f = findFuncGroup(_dirAffiliate, _dirUnit, _dirFunc);
+    if (!f) return;
+    if (f.goals.includes(name)){ alert('That Strategic Goal already exists under this functional group.'); return; }
+    f.goals.push(name);
+  }
+  saveDirectory();
+  renderDirectoryModal();
+  populateFilters();
+  if (_dirLevel===1) selectFilterScope(name);
+  else if (_dirLevel===2) selectFilterScope(_dirAffiliate, name);
+  else if (_dirLevel===3) selectFilterScope(_dirAffiliate, _dirUnit, name);
+  else renderGoals();
+}
+
+function dirRenameCommit(oldName, newValue){
+  if (!isAdmin()) return;
+  const newName = (newValue||'').trim();
+  if (!newName || newName===oldName) { renderDirectoryModal(); return; }
+  if (_dirLevel===1){
+    const a = findAffiliate(oldName);
+    if (!a) return;
+    if (findAffiliate(newName)){ alert('That affiliate name is already in use.'); renderDirectoryModal(); return; }
+    a.name = newName;
+    entries.forEach(e=>{ if (e.company===oldName) e.company=newName; });
+  } else if (_dirLevel===2){
+    const a = findAffiliate(_dirAffiliate); if (!a) return;
+    const u = a.units.find(x=>x.name===oldName); if (!u) return;
+    if (a.units.find(x=>x.name===newName)){ alert('That unit name is already in use under this affiliate.'); renderDirectoryModal(); return; }
+    u.name = newName;
+    entries.forEach(e=>{ if (e.company===_dirAffiliate && e.businessUnit===oldName) e.businessUnit=newName; });
+  } else if (_dirLevel===3){
+    const u = findUnit(_dirAffiliate, _dirUnit); if (!u) return;
+    const f = u.funcGroups.find(x=>x.name===oldName); if (!f) return;
+    if (u.funcGroups.find(x=>x.name===newName)){ alert('That functional group name is already in use under this unit.'); renderDirectoryModal(); return; }
+    f.name = newName;
+    entries.forEach(e=>{ if (e.company===_dirAffiliate && e.businessUnit===_dirUnit && e.functionalUnit===oldName) e.functionalUnit=newName; });
+  } else {
+    const f = findFuncGroup(_dirAffiliate, _dirUnit, _dirFunc); if (!f) return;
+    const idx = f.goals.indexOf(oldName); if (idx===-1) return;
+    if (f.goals.includes(newName)){ alert('That Strategic Goal name is already in use under this functional group.'); renderDirectoryModal(); return; }
+    f.goals[idx] = newName;
+    entries.forEach(e=>{ if (e.company===_dirAffiliate && e.businessUnit===_dirUnit && e.functionalUnit===_dirFunc && e.strategicGoal===oldName) e.strategicGoal=newName; });
+  }
+  saveDirectory();
+  persist();
+  renderDirectoryModal();
+  populateFilters();
+  if (_dirLevel===1) selectFilterScope(newName);
+  else if (_dirLevel===2) selectFilterScope(_dirAffiliate, newName);
+  else if (_dirLevel===3) selectFilterScope(_dirAffiliate, _dirUnit, newName);
+  else renderGoals();
+}
+
+function dirDeleteItem(name){
+  if (!isAdmin()) return;
+  let refCount = 0;
+  if (_dirLevel===1) refCount = entries.filter(e=>e.company===name).length;
+  else if (_dirLevel===2) refCount = entries.filter(e=>e.company===_dirAffiliate && e.businessUnit===name).length;
+  else if (_dirLevel===3) refCount = entries.filter(e=>e.company===_dirAffiliate && e.businessUnit===_dirUnit && e.functionalUnit===name).length;
+  else refCount = entries.filter(e=>e.company===_dirAffiliate && e.businessUnit===_dirUnit && e.functionalUnit===_dirFunc && e.strategicGoal===name).length;
+
+  const warn = refCount ? `\n\n${refCount} existing deliverable${refCount===1?'':'s'} still use this value — they'll keep it, they just won't be reachable through this filter option anymore.` : '';
+  if (!confirm(`Remove "${name}" from the directory?${warn}`)) return;
+
+  if (_dirLevel===1){
+    directory.affiliates = directory.affiliates.filter(a=>a.name!==name);
+  } else if (_dirLevel===2){
+    const a = findAffiliate(_dirAffiliate);
+    if (a) a.units = a.units.filter(u=>u.name!==name);
+  } else if (_dirLevel===3){
+    const u = findUnit(_dirAffiliate, _dirUnit);
+    if (u) u.funcGroups = u.funcGroups.filter(f=>f.name!==name);
+  } else {
+    const f = findFuncGroup(_dirAffiliate, _dirUnit, _dirFunc);
+    if (f) f.goals = f.goals.filter(g=>g!==name);
+  }
+  saveDirectory();
+  renderDirectoryModal();
+  populateFilters();
+  if (_dirLevel===4) renderGoals();
+}
+
+/* ---------- Rendering ---------- */
+function rubricGaugeHTML(){
+  const dotsPositions = [10,30,50,70,90];
+  return `<div class="rubric-gauge">
+    ${[0,1,2,3,4].map(i=>`<div class="seg" style="background:linear-gradient(90deg, ${RUBRIC_COLORS[i]}, ${RUBRIC_COLORS[Math.min(i+1,4)]});"></div>`).join('')}
+  </div>`;
+}
+
+function ratingRowHTML(e){
+  const current = e.rating || null;
+  const btns = [1,2,3,4,5].map(lvl=>{
+    const active = current===lvl ? 'active' : '';
+    return `<button type="button" class="rbtn ${active}" style="--c:${RUBRIC_COLORS[lvl-1]};" title="L${lvl} — ${RUBRIC_LABELS[lvl-1]}" onclick="setRating('${e.id}',${lvl})">${lvl}</button>`;
+  }).join('');
+  const status = current
+    ? `<span class="rating-status">Rated L${current} — ${esc(RUBRIC_LABELS[current-1])}</span>`
+    : `<span class="rating-status unrated">Not yet rated — tap a level</span>`;
+  return `<div class="rating-row">
+    <span class="rating-label">Rating</span>
+    <div class="rating-btns">${btns}</div>
+    ${status}
+  </div>`;
+}
+
+function setRating(id, level){
+  const e = entries.find(x=>x.id===id);
+  if (!e) return;
+  e.rating = (e.rating === level) ? null : level; // click again to clear
+  persist();
+  renderGoals();
+}
+
+function resetAllRatings(){
+  const filtered = getFiltered();
+  const ratedCount = filtered.filter(e=>e.rating).length;
+  if (!filtered.length){ alert('There are no targets in the current view to reset.'); return; }
+  if (!ratedCount){ alert('No ratings to reset in this view.'); return; }
+  const scopeNote = document.getElementById('mainHeadTitle').textContent;
+  if (!confirm(`Reset all ${ratedCount} rating${ratedCount===1?'':'s'} for "${scopeNote}" back to unrated?\n\nThis can't be undone.`)) return;
+  filtered.forEach(e=>{ e.rating = null; });
+  persist();
+  renderGoals();
+}
+
+function remarksRowHTML(e){
+  return `<div class="remarks-block">
+    <span class="remarks-label">Remarks / Evidence</span>
+    <textarea class="remarks-input" placeholder="Describe the evidence supporting this rating…" onblur="setRemarks('${e.id}', this.value)">${esc(e.remarks||'')}</textarea>
+  </div>`;
+}
+
+function setRemarks(id, value){
+  const e = entries.find(x=>x.id===id);
+  if (!e) return;
+  e.remarks = value;
+  persist();
+}
+
+// Sums the raw Weight (%) values assigned to a group of targets — no rating involved.
+// Used to flag whether a strategic goal's targets add up to 100% of that goal, are
+// under-allocated (falls short), or over-allocated (exceeds), regardless of ratings.
+function computeWeightAllocation(list){
+  let total = 0, unset = 0;
+  list.forEach(e=>{
+    const w = parseFloat(e.weight);
+    if (isFinite(w) && e.weight!=='' && e.weight!=null) total += w;
+    else unset++;
+  });
+  return { total, unset, count:list.length };
+}
+
+function weightAllocationBadge(list){
+  const { total, unset } = computeWeightAllocation(list);
+  const rounded = Math.round(total*10)/10;
+  if (unset === list.length){
+    return `<span class="wa-badge wa-none">No weights set</span>`;
+  }
+  const unsetNote = unset ? ` · ${unset} target${unset===1?'':'s'} unweighted` : '';
+  if (Math.abs(total-100) < 0.05){
+    return `<span class="wa-badge wa-ok">100% weight allocated ✓${unsetNote}</span>`;
+  }
+  if (total < 100){
+    return `<span class="wa-badge wa-short">${rounded}% allocated · falls short by ${(100-total).toFixed(1)}%${unsetNote}</span>`;
+  }
+  return `<span class="wa-badge wa-over">${rounded}% allocated · exceeds by ${(total-100).toFixed(1)}%${unsetNote}</span>`;
+}
+
+function computeWeightedOverall(list){
+  if (!list.length) return null;
+  const fallbackWeight = list.length ? 100/list.length : 0;
+  let totalWeight = 0, earnedWeight = 0;
+  list.forEach(e=>{
+    const w = parseFloat(e.weight);
+    const wt = (isFinite(w) && w>0) ? w : fallbackWeight; // no weight set → split evenly among this group's targets
+    totalWeight += wt;
+    if (e.rating) earnedWeight += (e.rating/5) * wt;
+  });
+  if (!totalWeight) return null;
+  const pct = (earnedWeight/totalWeight) * 100;   // % of this group's 100% earned so far
+  const avg = pct/100*5;                          // same result expressed on a 1–5 scale, for quick reading
+  const ratedCount = list.filter(e=>e.rating).length;
+  return { avg, pct, ratedCount, total:list.length };
+}
+
+// Per Strategic Goal (used inside each goal-section header)
+function computeGoalOverall(list){ return computeWeightedOverall(list); }
+
+// Across the whole current scope (all Strategic Goals together) — weights carry across goals too,
+// so a heavier goal's targets move the overall score more than a lighter goal's do.
+function computeScopeOverall(list){ return computeWeightedOverall(list); }
+
+function entryCardHTML(e){
+  const cells = [e.c1,e.c2,e.c3,e.c4,e.c5];
+  return `
+  <div class="entry-card">
+    <div class="entry-top">
+      <div class="entry-tags">
+        ${e.weight!==''&&e.weight!=null ? `<span class="tag wt">${esc(e.weight)}% weight</span>` : ''}
+      </div>
+      <div class="entry-kpi">${esc(e.kpi)||'KPI not set'}</div>
+    </div>
+    ${isAdmin() ? `<div class="entry-actions" style="margin:-8px 0 12px;justify-content:flex-end;">
+        <button type="button" onclick="editEntry('${e.id}')">✎ Edit</button>
+        <button type="button" class="del" onclick="deleteEntry('${e.id}')">🗑 Delete</button>
+      </div>` : ''}
+    <div class="entry-deliverable target-hover" tabindex="0" onclick="this.classList.toggle('open')">
+      ${esc(e.deliverable)||'<span style="color:var(--text3);font-style:italic;">No deliverable description on file.</span>'}
+      <div class="rubric-tooltip">
+        <div class="rubric-tooltip-title">Scoring Rubric</div>
+        ${cells.map((c,i)=>`<div class="rt-row" style="--c:${RUBRIC_COLORS[i]};">
+            <div class="rt-lvl">L${i+1} · ${RUBRIC_LABELS[i]}</div>
+            <div class="rt-txt">${esc(c)||'<span style="color:var(--text3);font-style:italic;">Not defined</span>'}</div>
+          </div>`).join('')}
+      </div>
+    </div>
+    ${ratingRowHTML(e)}
+    ${remarksRowHTML(e)}
+    ${rubricGaugeHTML()}
+  </div>`;
+}
+
+function renderGoals(){
+  const filtered = getFiltered();
+  const content = document.getElementById('content');
+  document.getElementById('mainHeadCount').textContent = filtered.length ? `${filtered.length} deliverable${filtered.length===1?'':'s'}` : '';
+  document.getElementById('sampleNotice').style.display = usingSample ? 'block' : 'none';
+
+  const scopeOverallEl = document.getElementById('scopeOverall');
+  scopeOverallEl.innerHTML = '';
+  // (populated below, after we know the filtered list — see scope-overall render block)
+
+  const resetAllBtn = document.getElementById('resetAllBtn');
+  const ratedInView = filtered.filter(e=>e.rating).length;
+  resetAllBtn.style.display = filtered.length ? 'inline-flex' : 'none';
+  resetAllBtn.disabled = !ratedInView;
+  resetAllBtn.style.opacity = ratedInView ? '1' : '.5';
+  resetAllBtn.style.cursor = ratedInView ? 'pointer' : 'not-allowed';
+
+  const company = document.getElementById('fCompany').value;
+  const unit = document.getElementById('fUnit').value;
+  const func = document.getElementById('fFunc').value;
+  const scopeLabel = [func, unit, company].filter(Boolean).join(' · ');
+  document.getElementById('mainHeadTitle').textContent = scopeLabel || (isAdmin() ? 'All Deliverables' : 'Select a scope to begin');
+
+  const goalsSummaryEl = document.getElementById('goalsSummary');
+
+  if (!entries.length){
+    goalsSummaryEl.innerHTML = '';
+    content.innerHTML = `<div class="empty-state">
+      <h3>No goals loaded yet</h3>
+      <div>Import a CSV of Strategic Goals, Deliverables, and Rubrics to start browsing — or add a single entry by hand.</div>
+      <button class="mbtn" onclick="openImportModal()">⇪ Import CSV</button>
+    </div>`;
+    return;
+  }
+  if (!isAdmin() && (!company || !unit || !func)){
+    goalsSummaryEl.innerHTML = '';
+    content.innerHTML = `<div class="empty-state">
+      <h3>Select an Affiliate, Unit, and Functional Group</h3>
+      <div>Choose one specific option from each of the three dropdowns on the left to view deliverables. Viewing all affiliates at once isn't available.</div>
+    </div>`;
+    return;
+  }
+  if (!filtered.length){
+    goalsSummaryEl.innerHTML = '';
+    content.innerHTML = `<div class="empty-state">
+      <h3>No matches for this selection</h3>
+      <div>Try a different Business Affiliate, Unit, or Functional Group — or clear the search box.</div>
+    </div>`;
+    return;
+  }
+
+  // group by strategic goal
+  const groups = {};
+  filtered.forEach(e=>{
+    const g = e.strategicGoal || 'Uncategorized';
+    if (!groups[g]) groups[g]=[];
+    groups[g].push(e);
+  });
+
+  // order groups by the custom sequence saved in the Directory for this scope (falls back to alphabetical for anything not sequenced there, e.g. an "All" admin view)
+  let orderedGoalKeys;
+  if (company && unit && func){
+    const seq = allGoalNames(company, unit, func);
+    const inSeq = seq.filter(g=>groups[g]);
+    const notInSeq = Object.keys(groups).filter(g=>!seq.includes(g)).sort((a,b)=>a.localeCompare(b));
+    orderedGoalKeys = [...inSeq, ...notInSeq];
+  } else {
+    orderedGoalKeys = Object.keys(groups).sort((a,b)=>a.localeCompare(b));
+  }
+
+  goalsSummaryEl.innerHTML = `<div class="goals-summary">
+    <div class="goals-summary-title">Strategic Goals Summary</div>
+    ${orderedGoalKeys.map(g=>{
+      const overall = computeGoalOverall(groups[g]);
+      const scoreHTML = (overall && overall.ratedCount>0)
+        ? `<span class="goal-overall">${overall.pct.toFixed(1)}% of goal earned · <strong>${overall.avg.toFixed(2)}/5</strong> avg · ${overall.ratedCount}/${overall.total} targets rated</span>`
+        : `<span class="goal-overall no-data">Not yet rated</span>`;
+      return `<div class="goals-summary-row">
+        <span class="goals-summary-name">${esc(g)}</span>
+        <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
+          ${weightAllocationBadge(groups[g])}
+          ${scoreHTML}
+        </span>
+      </div>`;
+    }).join('')}
+  </div>`;
+
+  // Scope-level "% of goal earned" pill (header, next to the deliverable count).
+  // Built from the SAME per-target weights already used above, so it's the accumulated
+  // weight% earned per target, rolled up across every strategic goal currently in view —
+  // a goal with more total weight naturally moves this number more than a lighter one.
+  const scopeOverall = computeScopeOverall(filtered);
+  scopeOverallEl.innerHTML = (scopeOverall && scopeOverall.ratedCount>0)
+    ? `<span class="goal-overall">${scopeOverall.pct.toFixed(1)}% of goal earned · <strong>${scopeOverall.avg.toFixed(2)}/5</strong> avg · ${scopeOverall.ratedCount}/${scopeOverall.total} targets rated</span>`
+    : `<span class="goal-overall no-data">Not yet rated</span>`;
+
+  content.innerHTML = orderedGoalKeys.map(g=>{
+    return `<div class="goal-section">
+      <div class="goal-section-head">
+        <span class="goal-chip">Strategic Goal</span>
+        <h3>${esc(g)}</h3>
+        <div class="line"></div>
+        ${weightAllocationBadge(groups[g])}
+      </div>
+      ${groups[g].map(entryCardHTML).join('')}
+    </div>`;
+  }).join('');
+}
+
+/* ---------- Modals ---------- */
+/* ---------- Manual entry form: directory-driven cascading dropdowns ---------- */
+function manualSelectOptions(names){
+  return `<option value="">— Select —</option>` + names.map(n=>`<option value="${esc(n)}">${esc(n)}</option>`).join('') + `<option value="__custom__">➕ Type a new one…</option>`;
+}
+
+function manualFieldValue(selectId, customId){
+  const sel = document.getElementById(selectId);
+  if (sel.value === '__custom__') return document.getElementById(customId).value.trim();
+  return sel.value;
+}
+
+function manualSetField(selectId, customId, value){
+  const sel = document.getElementById(selectId);
+  const custom = document.getElementById(customId);
+  const opts = [...sel.options].map(o=>o.value);
+  if (value && opts.includes(value)){ sel.value = value; custom.style.display='none'; custom.value=''; }
+  else if (value){ sel.value = '__custom__'; custom.style.display='block'; custom.value = value; }
+  else { sel.value=''; custom.style.display='none'; custom.value=''; }
+}
+
+function refreshManualDropdowns(prefill){
+  const companySel = document.getElementById('mCompanySelect');
+  companySel.innerHTML = manualSelectOptions(allAffiliateNames());
+  manualSetField('mCompanySelect','mCompanyCustom', prefill ? prefill.company : '');
+  onManualCompanyChange(prefill ? prefill.businessUnit : '', prefill ? prefill.functionalUnit : '');
+}
+
+function onManualCompanyChange(prefillUnit, prefillFunc){
+  const custom = document.getElementById('mCompanyCustom');
+  const sel = document.getElementById('mCompanySelect');
+  custom.style.display = sel.value==='__custom__' ? 'block' : 'none';
+  const companyVal = sel.value==='__custom__' ? '' : sel.value;
+  const unitSel = document.getElementById('mUnitSelect');
+  unitSel.innerHTML = manualSelectOptions(allUnitNames(companyVal || null));
+  manualSetField('mUnitSelect','mUnitCustom', prefillUnit!==undefined ? prefillUnit : '');
+  onManualUnitChange(prefillFunc);
+}
+
+function onManualUnitChange(prefillFunc){
+  const custom = document.getElementById('mUnitCustom');
+  const sel = document.getElementById('mUnitSelect');
+  custom.style.display = sel.value==='__custom__' ? 'block' : 'none';
+  const companySel = document.getElementById('mCompanySelect');
+  const companyVal = companySel.value==='__custom__' ? document.getElementById('mCompanyCustom').value.trim() : companySel.value;
+  const unitVal = sel.value==='__custom__' ? '' : sel.value;
+  const funcSel = document.getElementById('mFuncSelect');
+  funcSel.innerHTML = manualSelectOptions(allFuncNames(companyVal || null, unitVal || null));
+  manualSetField('mFuncSelect','mFuncCustom', prefillFunc!==undefined ? prefillFunc : '');
+}
+
+function onManualFuncChange(){
+  const custom = document.getElementById('mFuncCustom');
+  const sel = document.getElementById('mFuncSelect');
+  custom.style.display = sel.value==='__custom__' ? 'block' : 'none';
+}
+
+let _editingEntryId = null;
+
+function openImportModal(){ if (!isAdmin()){ toggleAdminMode(); return; } document.getElementById('importStatus').textContent=''; document.getElementById('importModal').classList.add('show'); }
+
+function openManualModal(editId){
+  if (!isAdmin()){ toggleAdminMode(); return; }
+  _editingEntryId = editId || null;
+  const fields = ['mWeight','mGoal','mKpi','mDeliverable','mC1','mC2','mC3','mC4','mC5'];
+  if (_editingEntryId){
+    const e = entries.find(x=>x.id===_editingEntryId);
+    if (!e) return;
+    document.getElementById('manualModalTitle').textContent = 'Edit Reference Entry';
+    document.getElementById('manualSaveBtn').textContent = 'Save Changes';
+    refreshManualDropdowns({ company: e.company||'', businessUnit: e.businessUnit||'', functionalUnit: e.functionalUnit||'' });
+    document.getElementById('mWeight').value = e.weight!=null ? e.weight : '';
+    document.getElementById('mGoal').value = e.strategicGoal||'';
+    document.getElementById('mKpi').value = e.kpi||'';
+    document.getElementById('mDeliverable').value = e.deliverable||'';
+    document.getElementById('mC1').value = e.c1||'';
+    document.getElementById('mC2').value = e.c2||'';
+    document.getElementById('mC3').value = e.c3||'';
+    document.getElementById('mC4').value = e.c4||'';
+    document.getElementById('mC5').value = e.c5||'';
+  } else {
+    document.getElementById('manualModalTitle').textContent = 'Add Reference Entry';
+    document.getElementById('manualSaveBtn').textContent = 'Save Entry';
+    fields.forEach(id=>document.getElementById(id).value='');
+    refreshManualDropdowns(null);
+  }
+  document.getElementById('manualModal').classList.add('show');
+}
+
+function editEntry(id){
+  if (!isAdmin()) return;
+  openManualModal(id);
+}
+
+function deleteEntry(id){
+  if (!isAdmin()) return;
+  const e = entries.find(x=>x.id===id);
+  if (!e) return;
+  if (!confirm(`Delete this deliverable?\n\n"${(e.deliverable||'').substring(0,80)}"\n\nThis can't be undone.`)) return;
+  entries = entries.filter(x=>x.id!==id);
+  persist();
+  populateFilters();
+  renderGoals();
+}
+function closeModal(id){ document.getElementById(id).classList.remove('show'); }
+
+function saveManualEntry(){
+  if (!isAdmin()) return;
+  const goal = document.getElementById('mGoal').value.trim();
+  const deliverable = document.getElementById('mDeliverable').value.trim();
+  if (!goal || !deliverable){ alert('Strategic Goal and Deliverable are required.'); return; }
+  const fields = {
+    company: manualFieldValue('mCompanySelect','mCompanyCustom'),
+    businessUnit: manualFieldValue('mUnitSelect','mUnitCustom'),
+    functionalUnit: manualFieldValue('mFuncSelect','mFuncCustom'),
+    strategicGoal: goal,
+    kpi: document.getElementById('mKpi').value.trim(),
+    deliverable,
+    weight: document.getElementById('mWeight').value.trim(),
+    c1: document.getElementById('mC1').value.trim(),
+    c2: document.getElementById('mC2').value.trim(),
+    c3: document.getElementById('mC3').value.trim(),
+    c4: document.getElementById('mC4').value.trim(),
+    c5: document.getElementById('mC5').value.trim()
+  };
+  if (_editingEntryId){
+    const e = entries.find(x=>x.id===_editingEntryId);
+    if (e) Object.assign(e, fields); // keep id and rating untouched
+  } else {
+    entries.push(Object.assign({ id: uid(), rating: null, remarks: '' }, fields));
+  }
+  ensureDirectoryGoal(fields.company, fields.businessUnit, fields.functionalUnit, fields.strategicGoal);
+  saveDirectory();
+  persist();
+  closeModal('manualModal');
+  _editingEntryId = null;
+  populateFilters();
+  renderGoals();
+}
+
+/* ---------- Excel/CSV import/export ---------- */
+function cell(row, key){
+  // tolerant lookup: exact header match, or trimmed/case-insensitive fallback
+  if (row[key]!=null) return String(row[key]).trim();
+  const found = Object.keys(row).find(k => k.trim().toLowerCase() === key.trim().toLowerCase());
+  return found ? String(row[found]||'').trim() : '';
+}
+
+function processRows(rows, statusEl){
+  let added = 0, skipped = 0;
+  const imported = [];
+  rows.forEach(row=>{
+    const goal = cell(row,'Strategic Goal');
+    const deliverable = cell(row,'Deliverable');
+    if (!goal || !deliverable){ skipped++; return; }
+    imported.push({
+      id: uid(),
+      company: cell(row,'Company'),
+      businessUnit: cell(row,'Business Unit'),
+      functionalUnit: cell(row,'Functional Unit'),
+      strategicGoal: goal,
+      kpi: cell(row,'KPI'),
+      deliverable,
+      weight: cell(row,'Weight (%)'),
+      c1: cell(row,'Criteria L1 - Unsatisfactory'),
+      c2: cell(row,'Criteria L2 - Needs Development'),
+      c3: cell(row,'Criteria L3 - Meets Expectations'),
+      c4: cell(row,'Criteria L4 - Exceeds Expectations'),
+      c5: cell(row,'Criteria L5 - Outstanding'),
+      rating: (function(){ const r = parseInt(cell(row,'Rating (1-5)'),10); return (r>=1&&r<=5) ? r : null; })(),
+      remarks: cell(row,'Remarks / Evidence')
+    });
+    added++;
+  });
+  if (usingSample) entries = [];
+  entries = entries.concat(imported);
+  imported.forEach(e=>ensureDirectoryGoal(e.company, e.businessUnit, e.functionalUnit, e.strategicGoal));
+  saveDirectory();
+  persist();
+  populateFilters();
+  renderGoals();
+  statusEl.textContent = `✅ Imported ${added} entr${added===1?'y':'ies'}${skipped?`, skipped ${skipped} (missing Strategic Goal or Deliverable)`:''}.`;
+}
+
+function handleImportFile(file){
+  if (!isAdmin()) return;
+  if (!file) return;
+  const statusEl = document.getElementById('importStatus');
+  const name = (file.name||'').toLowerCase();
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')){
+    const reader = new FileReader();
+    reader.onload = function(e){
+      try{
+        const wb = XLSX.read(e.target.result, {type:'array'});
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+        if (!rows.length){ statusEl.textContent = '⚠️ That sheet looks empty — check it has a header row plus data.'; return; }
+        processRows(rows, statusEl);
+      }catch(err){
+        statusEl.textContent = '❌ Could not read that Excel file: ' + err.message;
+      }
+    };
+    reader.onerror = function(){ statusEl.textContent = '❌ Could not read that file.'; };
+    reader.readAsArrayBuffer(file);
+  } else {
+    Papa.parse(file, {
+      header:true, skipEmptyLines:true,
+      complete: function(res){ processRows(res.data, statusEl); },
+      error: function(err){ statusEl.textContent = '❌ Could not read that file: ' + err.message; }
+    });
+  }
+}
+
+function downloadTemplate(){
+  if (!isAdmin()) return;
+  const csv = Papa.unparse([CSV_HEADERS]);
+  triggerDownload(csv, 'goal_rubric_template.csv');
+}
+
+function exportCSV(){
+  if (!entries.length){ alert('There is nothing to export yet.'); return; }
+  const headers = CSV_HEADERS.concat(['Rating (1-5)','Remarks / Evidence']);
+  const rows = entries.map(e=>[
+    e.company||'', e.businessUnit||'', e.functionalUnit||'', e.strategicGoal||'', e.kpi||'',
+    e.deliverable||'', e.weight!=null?e.weight:'', e.c1||'', e.c2||'', e.c3||'', e.c4||'', e.c5||'',
+    e.rating||'', e.remarks||''
+  ]);
+  const csv = Papa.unparse([headers, ...rows]);
+  triggerDownload(csv, 'goal_rubric_export.csv');
+}
+
+function triggerDownload(text, filename){
+  const blob = new Blob([text], {type:'text/csv;charset=utf-8;'});
+  const url = URL.createObjectURL(blob);
+  const a = document.createElement('a');
+  a.href = url; a.download = filename;
+  document.body.appendChild(a); a.click(); document.body.removeChild(a);
+  URL.revokeObjectURL(url);
+}
+
+function saveAsPDF(evt){
+  if (!entries.length){ alert('There is nothing to save yet.'); return; }
+  const el = document.getElementById('printArea');
+  const scopeBit = (document.getElementById('mainHeadTitle').textContent || 'Targets').trim().replace(/[^\w\-]+/g,'_').slice(0,60);
+  const btn = evt ? evt.currentTarget : null;
+  const originalLabel = btn ? btn.textContent : null;
+  if (btn){ btn.textContent = '⏳ Generating…'; btn.disabled = true; }
+  html2pdf().set({
+    margin: 10,
+    filename: `PGB_Targets_${scopeBit}.pdf`,
+    image: { type: 'jpeg', quality: 0.98 },
+    html2canvas: { scale: 2, useCORS: true },
+    jsPDF: { unit: 'mm', format: 'a4', orientation: 'portrait' },
+    pagebreak: { mode: ['css','avoid-all'] }
+  }).from(el).save().then(()=>{
+    if (btn){ btn.textContent = originalLabel; btn.disabled = false; }
+  }).catch(()=>{
+    if (btn){ btn.textContent = originalLabel; btn.disabled = false; }
+    alert('Could not generate the PDF. Try the Print View option instead and choose "Save as PDF" in the print dialog.');
+  });
+}
+
+/* drag & drop */
+document.addEventListener('DOMContentLoaded', function(){
+  const dz = document.getElementById('dropZone');
+  dz.addEventListener('dragover', e=>{ e.preventDefault(); dz.style.borderColor='var(--gold2)'; });
+  dz.addEventListener('dragleave', ()=>{ dz.style.borderColor=''; });
+  dz.addEventListener('drop', e=>{
+    e.preventDefault(); dz.style.borderColor='';
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) handleImportFile(e.dataTransfer.files[0]);
+  });
+
+  loadData();
+  loadDirectory();
+  loadRateeName();
+  populateFilters();
+  renderGoals();
+  applyAdminUI();
+});
+
+document.querySelectorAll('.modal-overlay').forEach(m=>{
+  m.addEventListener('click', e=>{ if (e.target===m) m.classList.remove('show'); });
+});
+</script>
+</body>
+</html>
