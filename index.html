@@ -533,6 +533,22 @@ let _pushTimer = null;
 let _fbRef = null;
 let _lastKnownUpdatedAt = 0; // used to ignore the echo of our own writes coming back through the live listener
 
+// ---- Local-edit guard --------------------------------------------------
+// Ratings, remarks, imports, manual entries, and directory edits all update
+// `entries`/`directory` locally first and only reach the cloud ~900ms later
+// (see schedulePush). Meanwhile the initial pullFromCloud() and the live
+// listener can resolve with an OLDER snapshot. Without a guard, that older
+// snapshot silently overwrites whatever the person just did — this is why
+// imports (and ratings/remarks) could appear to "not save" when online but
+// work fine offline (offline, there's no cloud data to race against).
+// _localChangeSeq/_syncedChangeSeq track whether there's an edit that hasn't
+// finished being pushed yet; while there is, incoming remote snapshots are
+// skipped rather than applied.
+let _localChangeSeq = 0;
+let _syncedChangeSeq = 0;
+function markLocalChange(){ _localChangeSeq++; }
+function hasUnsyncedLocalChanges(){ return _localChangeSeq !== _syncedChangeSeq; }
+
 function firebaseReady(){
   if (_fbRef) return true;
   try{
@@ -568,6 +584,7 @@ function schedulePush(){
 
 // Shared by the one-time pull and the live listener below.
 function applyRemoteData(data){
+  if (hasUnsyncedLocalChanges()) return false; // don't clobber an edit that's still on its way up
   let changed = false;
   if (data && Array.isArray(data.entries)){
     entries = data.entries;
@@ -593,6 +610,11 @@ async function pullFromCloud(){
   updateSyncBadge('syncing');
   try{
     const snap = await _fbRef.once('value');
+    if (hasUnsyncedLocalChanges()){
+      // A local edit landed while this pull was in flight — leave it alone,
+      // it'll be pushed shortly and the badge will update again then.
+      return;
+    }
     applyRemoteData(snap.val());
     const stamp = _lastKnownUpdatedAt ? new Date(_lastKnownUpdatedAt).toLocaleTimeString() : '';
     updateSyncBadge('synced', stamp);
@@ -612,8 +634,10 @@ async function pushToCloud(){
       adminPasscodeHash: await getAdminPasscodeHash(),
       updatedAt: Date.now()
     };
+    const seqAtPush = _localChangeSeq; // whatever's in `entries`/`directory` right now is about to be sent
     _lastKnownUpdatedAt = payload.updatedAt; // set before the write so our own echo is recognized and skipped
     await _fbRef.set(payload);
+    _syncedChangeSeq = seqAtPush; // safe again to accept remote snapshots, unless another edit happened meanwhile
     updateSyncBadge('synced', new Date(payload.updatedAt).toLocaleTimeString());
   }catch(err){
     console.warn('Cloud sync (push) failed:', err);
@@ -692,6 +716,7 @@ async function checkAdminPasscode(candidate){
 async function setAdminPasscode(pw){
   const hash = await sha256Hex(pw);
   localStorage.setItem(ADMIN_PASSCODE_KEY, hash || pw);
+  markLocalChange();
   schedulePush();
 }
 
@@ -780,6 +805,7 @@ function loadData(){
 function persist(){
   usingSample = false;
   localStorage.setItem(STORAGE_KEY, JSON.stringify({entries}));
+  markLocalChange();
   schedulePush();
 }
 
@@ -846,7 +872,7 @@ function loadDirectory(){
   directory = defaultDirectory();
   saveDirectory();
 }
-function saveDirectory(){ localStorage.setItem(DIRECTORY_KEY, JSON.stringify(directory)); schedulePush(); }
+function saveDirectory(){ localStorage.setItem(DIRECTORY_KEY, JSON.stringify(directory)); markLocalChange(); schedulePush(); }
 
 function findAffiliate(name){ return directory.affiliates.find(a=>a.name===name) || null; }
 function findUnit(affName, unitName){ const a = findAffiliate(affName); return a ? (a.units.find(u=>u.name===unitName)||null) : null; }
