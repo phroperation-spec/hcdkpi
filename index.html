@@ -1,3 +1,4 @@
+
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -10,8 +11,8 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/PapaParse/5.4.1/papaparse.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/xlsx/0.18.5/xlsx.full.min.js"></script>
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-app-compat.js"></script>
-<script src="https://www.gstatic.com/firebasejs/10.13.0/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
 <style>
 :root{
   --navy:#0d1f3c; --navy2:#142850; --navy3:#1a3560;
@@ -322,7 +323,7 @@ input[type=file]{display:none;}
         <button class="mbtn" onclick="saveAsPDF(event)">⬇ Save as PDF</button>
         <button class="mbtn primary" id="adminTemplateBtn" onclick="downloadTemplate()" style="display:none;">Template</button>
         <button class="mbtn" id="adminChangePwBtn" onclick="openChangePasscodeModal()" style="display:none;">🔑 Change Passcode</button>
-        <button class="mbtn" id="syncBadge" onclick="manualSync()" title="Click to force a sync">☁ —</button>
+        <button class="mbtn" id="syncBadge" onclick="manualSync()" title="Click to sync now">☁ —</button>
         <button class="mbtn" id="adminLockBtn" onclick="toggleAdminMode()">🔒 Admin</button>
       </div>
       <button class="mbtn" id="resetAllBtn" onclick="resetAllRatings()" style="background:var(--blue);border-color:var(--blue);color:#fff;">↺ Reset All Ratings</button>
@@ -511,49 +512,39 @@ const CSV_HEADERS = ['Company','Business Unit','Functional Unit','Strategic Goal
 let entries = [];
 let usingSample = false;
 
-const SAMPLE_ENTRIES = [
-  {company:'PGB Construction & Manufacturing', businessUnit:'Project Delivery', functionalUnit:'Site Engineering', strategicGoal:'Operational Excellence', kpi:'On-Time Milestone Completion', deliverable:'Deliver assigned project milestones per the approved schedule, with variances flagged and mitigated before they cascade.', weight:25, c:['Consistently misses milestones with no escalation or mitigation plan.','Frequent delays; mitigation plans are reactive rather than proactive.','Meets scheduled milestones with occasional, well-managed variances.','Consistently ahead of schedule with proactive risk mitigation.','Sets the benchmark — schedule performance and mitigation practices adopted as standard across sites.']},
-  {company:'PGB Construction & Manufacturing', businessUnit:'Project Delivery', functionalUnit:'Site Engineering', strategicGoal:'Financial Stewardship', kpi:'Budget Variance Control', deliverable:'Keep project cost variance within approved thresholds and report deviations with corrective action within 5 working days.', weight:20, c:['Cost overruns exceed 15% with no reporting.','Overruns of 8-15%, reporting delayed beyond 10 days.','Variance within ±5%, reported on time.','Variance within ±2%, with documented cost-saving initiatives.','Delivers under budget while improving quality — practice becomes a reference case for other sites.']},
-  {company:'PGB Human Capital', businessUnit:'HR Shared Services', functionalUnit:'Talent Acquisition', strategicGoal:'Talent Development', kpi:'Time-to-Fill', deliverable:'Fill approved manpower requisitions within the target hiring cycle while maintaining candidate quality standards.', weight:20, c:['Average time-to-fill exceeds target by more than 50%.','Exceeds target by 20-50%; pipeline visibility is weak.','Meets target time-to-fill for most requisitions.','Consistently beats target with strong candidate quality scores.','Redesigns sourcing practices that measurably cut cycle time org-wide.']},
-  {company:'PGB Human Capital', businessUnit:'HR Shared Services', functionalUnit:'Learning & Development', strategicGoal:'Talent Development', kpi:'Training Completion Rate', deliverable:'Ensure assigned learning programs are completed by target population within the cycle, with post-training assessment scores tracked.', weight:15, c:['Completion rate below 50%; no assessment tracking.','Completion 50-70%; inconsistent tracking.','Completion 80%+, assessments tracked as required.','Completion 90%+, with measurable skill uplift evidenced.','Program redesigned based on results, adopted as a company-wide model.']},
-  {company:'PGB Port Logistics & Shipping', businessUnit:'Terminal Operations', functionalUnit:'Yard Planning', strategicGoal:'Customer Centricity', kpi:'Vessel Turnaround Time', deliverable:'Plan yard and berth allocation to keep vessel turnaround within service-level commitments to shipping lines.', weight:22, c:['Turnaround consistently breaches SLA, with client complaints.','Frequent SLA breaches; limited corrective response.','Meets SLA for the majority of vessel calls.','Beats SLA consistently with proactive client communication.','Sets new SLA benchmarks adopted terminal-wide; cited in client reviews.']},
-  {company:'PGB Real Estate & Property Management', businessUnit:'Property Management', functionalUnit:'Facilities & Maintenance', strategicGoal:'Operational Excellence', kpi:'Preventive Maintenance Compliance', deliverable:'Execute the preventive maintenance schedule across managed properties with documented completion and tenant impact minimized.', weight:18, c:['PM schedule compliance below 60%; frequent unplanned breakdowns.','Compliance 60-80%; documentation incomplete.','Compliance 90%+ with proper documentation.','Compliance 95%+, breakdowns trend downward quarter over quarter.','Zero unplanned downtime; PM approach referenced across property portfolio.']}
-];
-
-function uid(){ return 'e' + Math.random().toString(36).slice(2,10); }
-
-/* ---------- Cloud Sync (Firebase Realtime Database) ----------
-   1. Go to https://console.firebase.google.com → Add project (free "Spark" plan is enough).
-   2. Build → Realtime Database → Create Database → start in test mode (or set rules — see notes below).
-   3. Project settings (⚙) → General → "Your apps" → Add app → Web (</>) → copy the firebaseConfig object.
-   4. Paste it below, replacing FIREBASE_CONFIG.
-   Leave FIREBASE_CONFIG as null to keep working purely offline/local, as before. */
-// For Firebase JS SDK v7.20.0 and later, measurementId is optional
+/* ---------- Cloud Sync (cross-device, via Firebase Realtime Database) ----------
+   Every device that opens this same HTML file reads/writes the same shared node
+   in your Firebase Realtime Database, and gets live pushes when another device
+   changes something — no manual "sync" click needed (the button still works for
+   a forced refresh). Config comes from Firebase console → Project settings →
+   General → Your apps → (web app) → SDK setup and configuration. */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyDGMW8ii_wEjNp8JEqjetnZrxxW-uRWNY8",
-  authDomain: "hc-kpi-b3132.firebaseapp.com",
-  databaseURL: "https://hc-kpi-b3132-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "hc-kpi-b3132",
-  storageBucket: "hc-kpi-b3132.firebasestorage.app",
-  messagingSenderId: "760521344931",
-  appId: "1:760521344931:web:453644d55d8e35b945bc16",
-  measurementId: "G-FB9NB9B556"
+  apiKey: "AIzaSyBRhB8L5uIhC8gMseE_NP_eTtphwA7ahlo",
+  authDomain: "kpi-s-af412.firebaseapp.com",
+  databaseURL: "https://kpi-s-af412-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "kpi-s-af412",
+  storageBucket: "kpi-s-af412.firebasestorage.app",
+  messagingSenderId: "230886249286",
+  appId: "1:230886249286:web:58bf5639a3d79d5d798b47"
 };
-/* e.g.
-const firebaseConfig = {
-  apiKey: "AIzaSyDGMW8ii_wEjNp8JEqjetnZrxxW-uRWNY8",
-  authDomain: "hc-kpi-b3132.firebaseapp.com",
-  databaseURL: "https://hc-kpi-b3132-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "hc-kpi-b3132",
-  storageBucket: "hc-kpi-b3132.firebasestorage.app",
-  messagingSenderId: "760521344931",
-  appId: "1:760521344931:web:453644d55d8e35b945bc16",
-  measurementId: "G-FB9NB9B556"
-};
-*/
-const FIREBASE_PATH = 'pgb_goal_codex'; // node under which all shared data is stored
+const FIREBASE_SYNC_PATH = 'pgbGoalCodex'; // node in the Realtime Database that holds entries/directory/passcode
 
-let _fbRef = null, _fbReady = false, _applyingRemote = false, _pushTimer = null;
+let _pushTimer = null;
+let _fbRef = null;
+let _lastKnownUpdatedAt = 0; // used to ignore the echo of our own writes coming back through the live listener
+
+function firebaseReady(){
+  if (_fbRef) return true;
+  try{
+    if (!window.firebase || !FIREBASE_CONFIG.apiKey) return false;
+    if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
+    _fbRef = firebase.database().ref(FIREBASE_SYNC_PATH);
+    return true;
+  }catch(err){
+    console.warn('Firebase init failed:', err);
+    return false;
+  }
+}
 
 function updateSyncBadge(status, extra){
   const el = document.getElementById('syncBadge');
@@ -569,81 +560,140 @@ function updateSyncBadge(status, extra){
   el.style.color = m.color;
 }
 
-function initFirebaseSync(){
-  if (!FIREBASE_CONFIG){ updateSyncBadge('unconfigured'); return; }
-  try{
-    firebase.initializeApp(FIREBASE_CONFIG);
-    _fbRef = firebase.database().ref(FIREBASE_PATH);
-    updateSyncBadge('syncing');
-    // Live listener: fires immediately with current data, then again on every
-    // change from ANY device — this is what makes sync real-time across devices.
-    _fbRef.on('value', snap => {
-      _fbReady = true;
-      const data = snap.val();
-      if (!data){ updateSyncBadge('synced'); return; }
-      _applyingRemote = true;
-      let changed = false;
-      if (Array.isArray(data.entries)){
-        entries = data.entries;
-        usingSample = false;
-        localStorage.setItem(STORAGE_KEY, JSON.stringify({entries}));
-        changed = true;
-      }
-      if (data.directory && Array.isArray(data.directory.affiliates)){
-        directory = data.directory;
-        localStorage.setItem(DIRECTORY_KEY, JSON.stringify(directory));
-        changed = true;
-      }
-      if (data.adminPasscode){
-        localStorage.setItem(ADMIN_PASSCODE_KEY, data.adminPasscode);
-      }
-      const stamp = data.updatedAt ? new Date(data.updatedAt).toLocaleTimeString() : '';
-      updateSyncBadge('synced', stamp);
-      if (changed){ populateFilters(); renderGoals(); }
-      _applyingRemote = false;
-    }, err => {
-      console.warn('Firebase sync error:', err);
-      updateSyncBadge('offline');
-    });
-  }catch(err){
-    console.warn('Firebase init failed:', err);
-    updateSyncBadge('offline');
-  }
-}
-
 function schedulePush(){
-  if (!FIREBASE_CONFIG || !_fbReady || _applyingRemote) return;
+  if (!firebaseReady()) return;
   clearTimeout(_pushTimer);
   _pushTimer = setTimeout(pushToCloud, 900);
 }
 
-function pushToCloud(){
-  if (!_fbRef) return;
+// Shared by the one-time pull and the live listener below.
+function applyRemoteData(data){
+  let changed = false;
+  if (data && Array.isArray(data.entries)){
+    entries = data.entries;
+    usingSample = false;
+    localStorage.setItem(STORAGE_KEY, JSON.stringify({entries}));
+    changed = true;
+  }
+  if (data && data.directory && Array.isArray(data.directory.affiliates)){
+    directory = data.directory;
+    localStorage.setItem(DIRECTORY_KEY, JSON.stringify(directory));
+    changed = true;
+  }
+  if (data && isHash(data.adminPasscodeHash)){
+    localStorage.setItem(ADMIN_PASSCODE_KEY, data.adminPasscodeHash);
+  }
+  if (data && data.updatedAt){ _lastKnownUpdatedAt = data.updatedAt; }
+  if (changed){ populateFilters(); renderGoals(); }
+  return changed;
+}
+
+async function pullFromCloud(){
+  if (!firebaseReady()){ updateSyncBadge('unconfigured'); return; }
   updateSyncBadge('syncing');
-  const payload = {
-    entries,
-    directory,
-    adminPasscode: getAdminPasscode(),
-    updatedAt: Date.now()
-  };
-  _fbRef.set(payload)
-    .then(()=> updateSyncBadge('synced', new Date(payload.updatedAt).toLocaleTimeString()))
-    .catch(err => { console.warn('Firebase push failed:', err); updateSyncBadge('offline'); });
+  try{
+    const snap = await _fbRef.once('value');
+    applyRemoteData(snap.val());
+    const stamp = _lastKnownUpdatedAt ? new Date(_lastKnownUpdatedAt).toLocaleTimeString() : '';
+    updateSyncBadge('synced', stamp);
+  }catch(err){
+    console.warn('Cloud sync (pull) failed — using local copy:', err);
+    updateSyncBadge('offline');
+  }
+}
+
+async function pushToCloud(){
+  if (!firebaseReady()) return;
+  updateSyncBadge('syncing');
+  try{
+    const payload = {
+      entries,
+      directory,
+      adminPasscodeHash: await getAdminPasscodeHash(),
+      updatedAt: Date.now()
+    };
+    _lastKnownUpdatedAt = payload.updatedAt; // set before the write so our own echo is recognized and skipped
+    await _fbRef.set(payload);
+    updateSyncBadge('synced', new Date(payload.updatedAt).toLocaleTimeString());
+  }catch(err){
+    console.warn('Cloud sync (push) failed:', err);
+    updateSyncBadge('offline');
+  }
+}
+
+// Live cross-device sync: any other device's write shows up here within moments,
+// without anyone needing to click the sync button.
+function startRealtimeSync(){
+  if (!firebaseReady()) return;
+  _fbRef.on('value', snap => {
+    const data = snap.val();
+    if (!data || data.updatedAt === _lastKnownUpdatedAt) return; // ignore our own echo / empty node
+    applyRemoteData(data);
+    updateSyncBadge('synced', new Date(data.updatedAt).toLocaleTimeString());
+  });
 }
 
 function manualSync(){
-  if (!FIREBASE_CONFIG){
-    alert('Cloud sync isn\'t configured yet.\n\nCreate a Firebase Realtime Database, paste the config into FIREBASE_CONFIG near the top of the <script> tag, then reload.');
+  if (!firebaseReady()){
+    alert('Cloud sync isn\'t configured yet.\n\nMake sure you have an internet connection (Firebase SDK loads from gstatic.com) and that FIREBASE_CONFIG near the top of the <script> tag is filled in, then reload.');
     return;
   }
-  pushToCloud();
+  pullFromCloud();
 }
+
+const SAMPLE_ENTRIES = [
+  {company:'PGB Construction & Manufacturing', businessUnit:'Project Delivery', functionalUnit:'Site Engineering', strategicGoal:'Operational Excellence', kpi:'On-Time Milestone Completion', deliverable:'Deliver assigned project milestones per the approved schedule, with variances flagged and mitigated before they cascade.', weight:25, c:['Consistently misses milestones with no escalation or mitigation plan.','Frequent delays; mitigation plans are reactive rather than proactive.','Meets scheduled milestones with occasional, well-managed variances.','Consistently ahead of schedule with proactive risk mitigation.','Sets the benchmark — schedule performance and mitigation practices adopted as standard across sites.']},
+  {company:'PGB Construction & Manufacturing', businessUnit:'Project Delivery', functionalUnit:'Site Engineering', strategicGoal:'Financial Stewardship', kpi:'Budget Variance Control', deliverable:'Keep project cost variance within approved thresholds and report deviations with corrective action within 5 working days.', weight:20, c:['Cost overruns exceed 15% with no reporting.','Overruns of 8-15%, reporting delayed beyond 10 days.','Variance within ±5%, reported on time.','Variance within ±2%, with documented cost-saving initiatives.','Delivers under budget while improving quality — practice becomes a reference case for other sites.']},
+  {company:'PGB Human Capital', businessUnit:'HR Shared Services', functionalUnit:'Talent Acquisition', strategicGoal:'Talent Development', kpi:'Time-to-Fill', deliverable:'Fill approved manpower requisitions within the target hiring cycle while maintaining candidate quality standards.', weight:20, c:['Average time-to-fill exceeds target by more than 50%.','Exceeds target by 20-50%; pipeline visibility is weak.','Meets target time-to-fill for most requisitions.','Consistently beats target with strong candidate quality scores.','Redesigns sourcing practices that measurably cut cycle time org-wide.']},
+  {company:'PGB Human Capital', businessUnit:'HR Shared Services', functionalUnit:'Learning & Development', strategicGoal:'Talent Development', kpi:'Training Completion Rate', deliverable:'Ensure assigned learning programs are completed by target population within the cycle, with post-training assessment scores tracked.', weight:15, c:['Completion rate below 50%; no assessment tracking.','Completion 50-70%; inconsistent tracking.','Completion 80%+, assessments tracked as required.','Completion 90%+, with measurable skill uplift evidenced.','Program redesigned based on results, adopted as a company-wide model.']},
+  {company:'PGB Port Logistics & Shipping', businessUnit:'Terminal Operations', functionalUnit:'Yard Planning', strategicGoal:'Customer Centricity', kpi:'Vessel Turnaround Time', deliverable:'Plan yard and berth allocation to keep vessel turnaround within service-level commitments to shipping lines.', weight:22, c:['Turnaround consistently breaches SLA, with client complaints.','Frequent SLA breaches; limited corrective response.','Meets SLA for the majority of vessel calls.','Beats SLA consistently with proactive client communication.','Sets new SLA benchmarks adopted terminal-wide; cited in client reviews.']},
+  {company:'PGB Real Estate & Property Management', businessUnit:'Property Management', functionalUnit:'Facilities & Maintenance', strategicGoal:'Operational Excellence', kpi:'Preventive Maintenance Compliance', deliverable:'Execute the preventive maintenance schedule across managed properties with documented completion and tenant impact minimized.', weight:18, c:['PM schedule compliance below 60%; frequent unplanned breakdowns.','Compliance 60-80%; documentation incomplete.','Compliance 90%+ with proper documentation.','Compliance 95%+, breakdowns trend downward quarter over quarter.','Zero unplanned downtime; PM approach referenced across property portfolio.']}
+];
+
+function uid(){ return 'e' + Math.random().toString(36).slice(2,10); }
 
 /* ---------- Admin mode (view vs. add/import) ---------- */
 function isAdmin(){ return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true'; }
 
-function getAdminPasscode(){ return localStorage.getItem(ADMIN_PASSCODE_KEY) || DEFAULT_ADMIN_PASSCODE; }
-function setAdminPasscode(pw){ localStorage.setItem(ADMIN_PASSCODE_KEY, pw); schedulePush(); }
+function isHash(v){ return typeof v === 'string' && /^[0-9a-f]{64}$/.test(v); }
+
+async function sha256Hex(str){
+  try{
+    const enc = new TextEncoder().encode(str);
+    const buf = await crypto.subtle.digest('SHA-256', enc);
+    return [...new Uint8Array(buf)].map(b=>b.toString(16).padStart(2,'0')).join('');
+  }catch(e){
+    return null; // Web Crypto unavailable (very old browser) — caller falls back to plaintext
+  }
+}
+
+// Returns the stored passcode as a SHA-256 hash, transparently migrating any
+// older plaintext passcode (or the default) to a hash the first time it's needed.
+async function getAdminPasscodeHash(){
+  const stored = localStorage.getItem(ADMIN_PASSCODE_KEY);
+  if (isHash(stored)) return stored;
+  const plainOrDefault = stored || DEFAULT_ADMIN_PASSCODE;
+  const hash = await sha256Hex(plainOrDefault);
+  if (hash){ localStorage.setItem(ADMIN_PASSCODE_KEY, hash); }
+  return hash;
+}
+
+async function checkAdminPasscode(candidate){
+  const candidateHash = await sha256Hex(candidate);
+  if (candidateHash){
+    const storedHash = await getAdminPasscodeHash();
+    if (storedHash) return candidateHash === storedHash;
+  }
+  // Crypto API unavailable — fall back to the old plaintext comparison.
+  const stored = localStorage.getItem(ADMIN_PASSCODE_KEY);
+  return candidate === (stored || DEFAULT_ADMIN_PASSCODE);
+}
+
+async function setAdminPasscode(pw){
+  const hash = await sha256Hex(pw);
+  localStorage.setItem(ADMIN_PASSCODE_KEY, hash || pw);
+  schedulePush();
+}
 
 function applyAdminUI(){
   const admin = isAdmin();
@@ -672,9 +722,10 @@ function toggleAdminMode(){
   }
 }
 
-function submitAdminPasscode(){
+async function submitAdminPasscode(){
   const val = document.getElementById('adminPasscodeInput').value;
-  if (val === getAdminPasscode()){
+  const ok = await checkAdminPasscode(val);
+  if (ok){
     sessionStorage.setItem(ADMIN_SESSION_KEY, 'true');
     closeModal('adminModal');
     applyAdminUI();
@@ -691,19 +742,20 @@ function openChangePasscodeModal(){
   document.getElementById('changePasscodeModal').classList.add('show');
 }
 
-function submitChangePasscode(){
+async function submitChangePasscode(){
   if (!isAdmin()) return;
   const cur = document.getElementById('cpCurrent').value;
   const next = document.getElementById('cpNew').value;
-  const confirm = document.getElementById('cpConfirm').value;
+  const confirmVal = document.getElementById('cpConfirm').value;
   const errEl = document.getElementById('cpError');
   const okEl = document.getElementById('cpSuccess');
   errEl.style.display = 'none'; okEl.style.display = 'none';
-  if (cur !== getAdminPasscode()){ errEl.textContent = 'Current passcode is incorrect.'; errEl.style.display='block'; return; }
+  const curOk = await checkAdminPasscode(cur);
+  if (!curOk){ errEl.textContent = 'Current passcode is incorrect.'; errEl.style.display='block'; return; }
   if (!next || next.length < 4){ errEl.textContent = 'New passcode must be at least 4 characters.'; errEl.style.display='block'; return; }
-  if (next !== confirm){ errEl.textContent = 'New passcode and confirmation don\'t match.'; errEl.style.display='block'; return; }
-  setAdminPasscode(next);
-  okEl.textContent = '✅ Passcode updated.';
+  if (next !== confirmVal){ errEl.textContent = 'New passcode and confirmation don\'t match.'; errEl.style.display='block'; return; }
+  await setAdminPasscode(next);
+  okEl.textContent = '✅ Passcode updated. This will sync to your other devices too.';
   okEl.style.display = 'block';
   ['cpCurrent','cpNew','cpConfirm'].forEach(id=>document.getElementById(id).value='');
 }
@@ -1611,7 +1663,9 @@ document.addEventListener('DOMContentLoaded', function(){
   populateFilters();
   renderGoals();
   applyAdminUI();
-  initFirebaseSync(); // pulls the shared cloud copy live; falls back to the local copy above if offline/unconfigured
+  updateSyncBadge(firebaseReady() ? 'syncing' : 'unconfigured');
+  pullFromCloud(); // pulls the latest shared copy in the background; falls back to the local copy above if offline/unconfigured
+  startRealtimeSync(); // keeps this tab live-updated whenever another device saves changes
 });
 
 document.querySelectorAll('.modal-overlay').forEach(m=>{
