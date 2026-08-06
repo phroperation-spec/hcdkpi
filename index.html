@@ -331,6 +331,11 @@ input[type=file]{display:none;}
   </div>
 </div>
 
+<div id="syncFailBanner" style="display:none;background:#5c1f1f;color:#fff;padding:10px 20px;font-size:.85em;text-align:center;">
+  ⚠ Your last change could not be saved to the cloud (check your internet connection or Firebase database rules). It's kept safely in this browser only — reopening this site elsewhere may not show it yet.
+  <button onclick="document.getElementById('syncFailBanner').style.display='none';" style="margin-left:12px;background:transparent;border:1px solid #fff;color:#fff;padding:2px 10px;border-radius:4px;cursor:pointer;">Dismiss</button>
+</div>
+
 <div class="layout">
 
   <div class="rail">
@@ -519,13 +524,13 @@ let usingSample = false;
    a forced refresh). Config comes from Firebase console → Project settings →
    General → Your apps → (web app) → SDK setup and configuration. */
 const FIREBASE_CONFIG = {
-  apiKey: "AIzaSyBRhB8L5uIhC8gMseE_NP_eTtphwA7ahlo",
-  authDomain: "kpi-s-af412.firebaseapp.com",
-  databaseURL: "https://kpi-s-af412-default-rtdb.asia-southeast1.firebasedatabase.app",
-  projectId: "kpi-s-af412",
-  storageBucket: "kpi-s-af412.firebasestorage.app",
-  messagingSenderId: "230886249286",
-  appId: "1:230886249286:web:58bf5639a3d79d5d798b47"
+  apiKey: "AIzaSyDGMW8ii_wEjNp8JEqjetnZrxxW-uRWNY8",
+  authDomain: "hc-kpi-b3132.firebaseapp.com",
+  databaseURL: "https://hc-kpi-b3132-default-rtdb.asia-southeast1.firebasedatabase.app",
+  projectId: "hc-kpi-b3132",
+  storageBucket: "hc-kpi-b3132.firebasestorage.app",
+  messagingSenderId: "760521344931",
+  appId: "1:760521344931:web:453644d55d8e35b945bc16"
 };
 const FIREBASE_SYNC_PATH = 'pgbGoalCodex'; // node in the Realtime Database that holds entries/directory/passcode
 
@@ -574,6 +579,15 @@ function updateSyncBadge(status, extra){
   const m = map[status] || map.unconfigured;
   el.textContent = m.text;
   el.style.color = m.color;
+
+  // Surface cloud-save failures loudly — a color change on a small badge is
+  // easy to miss, and a missed failure here means the next reload can quietly
+  // overwrite this device's changes with stale cloud data.
+  const banner = document.getElementById('syncFailBanner');
+  if (banner){
+    if (status === 'offline') banner.style.display = 'block';
+    else if (status === 'synced') banner.style.display = 'none';
+  }
 }
 
 function schedulePush(){
