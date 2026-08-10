@@ -1,4 +1,3 @@
-
 <!DOCTYPE html>
 <html lang="en">
 <head>
@@ -551,8 +550,29 @@ let _lastKnownUpdatedAt = 0; // used to ignore the echo of our own writes coming
 // skipped rather than applied.
 let _localChangeSeq = 0;
 let _syncedChangeSeq = 0;
-function markLocalChange(){ _localChangeSeq++; }
+function markLocalChange(){ _localChangeSeq++; touchLocalUpdatedAt(); }
 function hasUnsyncedLocalChanges(){ return _localChangeSeq !== _syncedChangeSeq; }
+
+// ---- Persisted "last local edit" timestamp -----------------------------
+// _localChangeSeq/_syncedChangeSeq above only protect against a stale pull
+// arriving WHILE this tab is open. They reset to 0 on every reload, so on
+// their own they can't stop this scenario: you edit something, close the
+// tab (or lose connectivity) before the 900ms-debounced push finishes, then
+// reopen later — the guard thinks there's nothing unsynced, so the next
+// pull happily overwrites your freshly-loaded local data with the OLDER
+// copy still sitting in the cloud. That's the "resets my data" bug. Storing
+// the local edit time in localStorage (which survives closing the tab) lets
+// applyRemoteData() compare ages and refuse to accept cloud data that's
+// older than what's already on this device — instead it re-pushes local.
+const LOCAL_UPDATED_KEY = 'pgb_goal_codex_local_updated_at';
+function touchLocalUpdatedAt(){
+  const t = Date.now();
+  try{ localStorage.setItem(LOCAL_UPDATED_KEY, String(t)); }catch(e){}
+  return t;
+}
+function getLocalUpdatedAt(){
+  try{ return parseInt(localStorage.getItem(LOCAL_UPDATED_KEY)||'0',10) || 0; }catch(e){ return 0; }
+}
 
 function firebaseReady(){
   if (_fbRef) return true;
@@ -593,12 +613,31 @@ function updateSyncBadge(status, extra){
 function schedulePush(){
   if (!firebaseReady()) return;
   clearTimeout(_pushTimer);
-  _pushTimer = setTimeout(pushToCloud, 900);
+  _pushTimer = setTimeout(pushToCloud, 500);
+}
+
+// Fires the pending debounced push immediately instead of waiting out the
+// timer — used when the tab is about to be hidden/closed, since a queued
+// setTimeout can simply never run if the page unloads first.
+function flushPendingPush(){
+  if (_pushTimer){
+    clearTimeout(_pushTimer);
+    _pushTimer = null;
+    pushToCloud();
+  }
 }
 
 // Shared by the one-time pull and the live listener below.
 function applyRemoteData(data){
   if (hasUnsyncedLocalChanges()) return false; // don't clobber an edit that's still on its way up
+  if (data && data.updatedAt && data.updatedAt < getLocalUpdatedAt()){
+    // The cloud's copy is OLDER than what this device already has locally —
+    // most likely an earlier push from this device never finished (tab
+    // closed too soon, connection dropped, etc). Keep the local copy and
+    // try pushing it up again instead of overwriting it with stale data.
+    schedulePush();
+    return false;
+  }
   let changed = false;
   if (data && Array.isArray(data.entries)){
     entries = data.entries;
@@ -614,7 +653,10 @@ function applyRemoteData(data){
   if (data && isHash(data.adminPasscodeHash)){
     localStorage.setItem(ADMIN_PASSCODE_KEY, data.adminPasscodeHash);
   }
-  if (data && data.updatedAt){ _lastKnownUpdatedAt = data.updatedAt; }
+  if (data && data.updatedAt){
+    _lastKnownUpdatedAt = data.updatedAt;
+    try{ localStorage.setItem(LOCAL_UPDATED_KEY, String(data.updatedAt)); }catch(e){}
+  }
   if (changed){ populateFilters(); renderGoals(); }
   return changed;
 }
@@ -652,6 +694,7 @@ async function pushToCloud(){
     _lastKnownUpdatedAt = payload.updatedAt; // set before the write so our own echo is recognized and skipped
     await _fbRef.set(payload);
     _syncedChangeSeq = seqAtPush; // safe again to accept remote snapshots, unless another edit happened meanwhile
+    try{ localStorage.setItem(LOCAL_UPDATED_KEY, String(payload.updatedAt)); }catch(e){}
     updateSyncBadge('synced', new Date(payload.updatedAt).toLocaleTimeString());
   }catch(err){
     console.warn('Cloud sync (push) failed:', err);
@@ -678,6 +721,24 @@ function manualSync(){
   }
   pullFromCloud();
 }
+
+// Make sure a pending push isn't simply dropped when the tab is closed,
+// refreshed, or switched away from. `visibilitychange`→hidden fires
+// reliably (including on mobile, where beforeunload/pagehide often don't),
+// so it's the primary safety net; the other two are extra insurance.
+// beforeunload also warns the person if a push hasn't confirmed yet, so
+// they get a chance to wait rather than lose the last few seconds of edits.
+document.addEventListener('visibilitychange', function(){
+  if (document.visibilityState === 'hidden') flushPendingPush();
+});
+window.addEventListener('pagehide', flushPendingPush);
+window.addEventListener('beforeunload', function(e){
+  flushPendingPush();
+  if (hasUnsyncedLocalChanges()){
+    e.preventDefault();
+    e.returnValue = '';
+  }
+});
 
 const SAMPLE_ENTRIES = [
   {company:'PGB Construction & Manufacturing', businessUnit:'Project Delivery', functionalUnit:'Site Engineering', strategicGoal:'Operational Excellence', kpi:'On-Time Milestone Completion', deliverable:'Deliver assigned project milestones per the approved schedule, with variances flagged and mitigated before they cascade.', weight:25, c:['Consistently misses milestones with no escalation or mitigation plan.','Frequent delays; mitigation plans are reactive rather than proactive.','Meets scheduled milestones with occasional, well-managed variances.','Consistently ahead of schedule with proactive risk mitigation.','Sets the benchmark — schedule performance and mitigation practices adopted as standard across sites.']},
@@ -801,11 +862,18 @@ async function submitChangePasscode(){
 
 function loadData(){
   try{
-    const saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null');
-    if (saved && Array.isArray(saved.entries) && saved.entries.length){
-      entries = saved.entries;
-      usingSample = false;
-      return;
+    const raw = localStorage.getItem(STORAGE_KEY);
+    if (raw){
+      const saved = JSON.parse(raw);
+      // Only fall back to sample data when nothing has ever been saved. A saved,
+      // legitimately-empty array (e.g. after "Clear sample data" or deleting
+      // everything) must stay empty — checking `.length` here used to silently
+      // bring the samples back every time the real data was fully cleared out.
+      if (saved && Array.isArray(saved.entries)){
+        entries = saved.entries;
+        usingSample = false;
+        return;
+      }
     }
   }catch(e){}
   entries = SAMPLE_ENTRIES.map(s => ({
