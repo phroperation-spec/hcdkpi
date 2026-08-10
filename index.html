@@ -515,6 +515,12 @@ const CSV_HEADERS = ['Company','Business Unit','Functional Unit','Strategic Goal
 
 let entries = [];
 let usingSample = false;
+// True while this device has no local copy AND is still waiting on the
+// first cloud pull to resolve. While true, the UI shows a "loading" state
+// instead of either blank content or (worse) generic sample rows — showing
+// samples here is what made a brand-new device look like it had "reset"
+// the admin's real saved data.
+let awaitingCloud = false;
 
 /* ---------- Cloud Sync (cross-device, via Firebase Realtime Database) ----------
    Every device that opens this same HTML file reads/writes the same shared node
@@ -684,22 +690,25 @@ function applyRemoteData(data){
 }
 
 async function pullFromCloud(){
-  if (!firebaseReady()){ updateSyncBadge('unconfigured'); return; }
+  if (!firebaseReady()){ updateSyncBadge('unconfigured'); resolveAwaitingCloud(); return; }
   updateSyncBadge('syncing');
   try{
     const snap = await _fbRef.once('value');
     if (hasUnsyncedLocalChanges()){
       // A local edit landed while this pull was in flight — leave it alone,
       // it'll be pushed shortly and the badge will update again then.
+      resolveAwaitingCloud();
       return;
     }
     applyRemoteData(snap.val());
+    resolveAwaitingCloud();
     _lastSyncError = null;
     const stamp = _lastKnownUpdatedAt ? new Date(_lastKnownUpdatedAt).toLocaleTimeString() : '';
     updateSyncBadge('synced', stamp);
   }catch(err){
     console.warn('Cloud sync (pull) failed — using local copy:', err);
     _lastSyncError = errText(err);
+    resolveAwaitingCloud();
     updateSyncBadge('offline');
   }
 }
@@ -915,12 +924,44 @@ function loadData(){
       }
     }
   }catch(e){}
+  // No local copy on THIS device. If cloud sync is configured, don't guess —
+  // wait for the initial pullFromCloud() to tell us what the admin actually
+  // saved. Falling back to sample data here (before the pull finishes) is
+  // what made opening the site on another device look like it "reset" the
+  // admin's real data: the samples would render first and, if the cloud
+  // pull failed or was slow, just stay there.
+  if (firebaseReady()){
+    entries = [];
+    usingSample = false;
+    awaitingCloud = true;
+    return;
+  }
   entries = SAMPLE_ENTRIES.map(s => ({
     id: uid(), company:s.company, businessUnit:s.businessUnit, functionalUnit:s.functionalUnit,
     strategicGoal:s.strategicGoal, kpi:s.kpi, deliverable:s.deliverable, weight:s.weight,
     c1:s.c[0], c2:s.c[1], c3:s.c[2], c4:s.c[3], c5:s.c[4], rating:null, remarks:''
   }));
   usingSample = true;
+}
+
+// Called once the first cloud pull settles (success, empty, or error).
+// If a cloud pull actually populated `entries`, this just clears the
+// loading flag and re-renders the real data. If the cloud genuinely has
+// nothing (true first-ever run) or sync failed, it falls back to samples —
+// but only now, never before we knew the answer.
+function resolveAwaitingCloud(){
+  if (!awaitingCloud) return;
+  awaitingCloud = false;
+  if (!entries.length){
+    entries = SAMPLE_ENTRIES.map(s => ({
+      id: uid(), company:s.company, businessUnit:s.businessUnit, functionalUnit:s.functionalUnit,
+      strategicGoal:s.strategicGoal, kpi:s.kpi, deliverable:s.deliverable, weight:s.weight,
+      c1:s.c[0], c2:s.c[1], c3:s.c[2], c4:s.c[3], c5:s.c[4], rating:null, remarks:''
+    }));
+    usingSample = true;
+  }
+  populateFilters();
+  renderGoals();
 }
 
 function persist(){
@@ -1450,11 +1491,18 @@ function renderGoals(){
 
   if (!entries.length){
     goalsSummaryEl.innerHTML = '';
-    content.innerHTML = `<div class="empty-state">
-      <h3>No goals loaded yet</h3>
-      <div>Import a CSV of Strategic Goals, Deliverables, and Rubrics to start browsing — or add a single entry by hand.</div>
-      <button class="mbtn" onclick="openImportModal()">⇪ Import CSV</button>
-    </div>`;
+    if (awaitingCloud){
+      content.innerHTML = `<div class="empty-state">
+        <h3>⏳ Loading saved data…</h3>
+        <div>Checking the cloud for goals already saved by an admin. This only takes a moment.</div>
+      </div>`;
+    } else {
+      content.innerHTML = `<div class="empty-state">
+        <h3>No goals loaded yet</h3>
+        <div>Import a CSV of Strategic Goals, Deliverables, and Rubrics to start browsing — or add a single entry by hand.</div>
+        <button class="mbtn" onclick="openImportModal()">⇪ Import CSV</button>
+      </div>`;
+    }
     return;
   }
   if (!isAdmin() && (!company || !unit || !func)){
