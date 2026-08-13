@@ -12,6 +12,7 @@
 <script src="https://cdnjs.cloudflare.com/ajax/libs/html2pdf.js/0.10.1/html2pdf.bundle.min.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-app-compat.js"></script>
 <script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-database-compat.js"></script>
+<script src="https://www.gstatic.com/firebasejs/10.13.2/firebase-auth-compat.js"></script>
 <style>
 :root{
   --navy:#0d1f3c; --navy2:#142850; --navy3:#1a3560;
@@ -587,12 +588,37 @@ function firebaseReady(){
     if (!window.firebase || !FIREBASE_CONFIG.apiKey) return false;
     if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     _fbRef = firebase.database().ref(FIREBASE_SYNC_PATH);
+    ensureFirebaseAuth(); // kick off anonymous sign-in in the background; every read/write below awaits it first
     return true;
   }catch(err){
     console.warn('Firebase init failed:', err);
     _lastSyncError = err && err.message ? err.message : String(err);
     return false;
   }
+}
+
+// ---- Anonymous auth (required once the DB rules are locked to "auth != null") ----
+// This is separate from the app's own Admin passcode gate further down — that still
+// controls who can edit inside the app itself. This is a silent, background sign-in
+// so the *browser* is allowed to talk to Firebase at all. Without it, every read/write
+// gets rejected by the database rules before the passcode even comes into play. Every
+// visitor gets their own anonymous Firebase user id automatically — no prompt, no extra
+// login screen, nothing the person using the app ever sees.
+let _authPromise = null;
+function ensureFirebaseAuth(){
+  if (_authPromise) return _authPromise;
+  _authPromise = new Promise((resolve) => {
+    if (!window.firebase || !firebase.auth){ resolve(false); return; }
+    const unsub = firebase.auth().onAuthStateChanged(user => {
+      if (user){ unsub(); resolve(true); }
+    });
+    firebase.auth().signInAnonymously().catch(err => {
+      console.warn('Firebase anonymous sign-in failed:', err);
+      _lastSyncError = errText(err);
+      resolve(false);
+    });
+  });
+  return _authPromise;
 }
 
 function errText(err){
@@ -692,6 +718,7 @@ function applyRemoteData(data){
 async function pullFromCloud(){
   if (!firebaseReady()){ updateSyncBadge('unconfigured'); resolveAwaitingCloud(); return; }
   updateSyncBadge('syncing');
+  await ensureFirebaseAuth(); // don't attempt a read until we're signed in, or the DB rules will reject it
   try{
     const snap = await _fbRef.once('value');
     if (hasUnsyncedLocalChanges()){
@@ -722,6 +749,7 @@ async function pushToCloud(){
     return;
   }
   updateSyncBadge('syncing');
+  await ensureFirebaseAuth(); // don't attempt a write until we're signed in, or the DB rules will reject it
   try{
     const payload = {
       entries,
@@ -745,8 +773,9 @@ async function pushToCloud(){
 
 // Live cross-device sync: any other device's write shows up here within moments,
 // without anyone needing to click the sync button.
-function startRealtimeSync(){
+async function startRealtimeSync(){
   if (!firebaseReady()) return;
+  await ensureFirebaseAuth(); // don't attach the listener until we're signed in, or the DB rules will reject it
   _fbRef.on('value', snap => {
     const data = snap.val();
     if (!data || data.updatedAt === _lastKnownUpdatedAt) return; // ignore our own echo / empty node
