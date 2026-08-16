@@ -79,7 +79,11 @@ input[type=file]{display:none;}
   margin-bottom:14px;cursor:pointer;
 }
 .rail-select:last-child{margin-bottom:0;}
-.rail-select:disabled{opacity:.55;cursor:not-allowed;}
+.rail-select:disabled{
+  opacity:.85;cursor:default;background:var(--card);
+  -webkit-appearance:none;-moz-appearance:none;appearance:none;
+  background-image:none;
+}
 .rail-search{
   width:100%;padding:10px 11px;border:1px solid var(--border2);border-radius:7px;
   background:var(--card2);font-family:'DM Sans',sans-serif;font-size:.87em;color:var(--text);
@@ -318,6 +322,7 @@ input[type=file]{display:none;}
         <button class="mbtn" id="adminEntryBtn" onclick="openManualModal()" style="display:none;">✎ Add Entry</button>
         <button class="mbtn" id="adminImportBtn" onclick="openImportModal()" style="display:none;">⇪ Import Excel/CSV</button>
         <button class="mbtn" id="adminDirBtn" onclick="openDirectoryModal()" style="display:none;">🗂 Manage Directory</button>
+        <button class="mbtn" id="adminEmployeeBtn" onclick="openEmployeeModal()" style="display:none;">👥 Manage Employees</button>
         <button class="mbtn" id="adminExportBtn" onclick="exportCSV()" style="display:none;">⇩ Export CSV</button>
         <button class="mbtn" onclick="window.print()">🖨 Print View</button>
         <button class="mbtn" onclick="saveAsPDF(event)">⬇ Save as PDF</button>
@@ -339,7 +344,12 @@ input[type=file]{display:none;}
 <div class="layout">
 
   <div class="rail">
-    <div class="rail-card">
+    <div class="rail-card" id="employeeCard" style="display:none;">
+      <span class="rail-label">Employee</span>
+      <select class="rail-select" id="fEmployee" onchange="onEmployeeChange()"></select>
+      <div id="employeeHint" style="font-size:.74em;color:var(--text3);line-height:1.5;"></div>
+    </div>
+    <div class="rail-card" id="scopeFiltersCard">
       <span class="rail-label">Business Affiliate</span>
       <select class="rail-select" id="fCompany" onchange="onCompanyChange()"></select>
       <span class="rail-label">Unit</span>
@@ -505,6 +515,45 @@ input[type=file]{display:none;}
   </div>
 </div>
 
+<!-- Employee Directory Modal -->
+<div class="modal-overlay" id="employeeModal">
+  <div class="modal-box" style="max-width:640px;">
+    <div class="modal-head"><h3>Employee Directory</h3><button class="modal-close" onclick="closeModal('employeeModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="template-note">
+        Upload the list of employees once, mapped to the Business Affiliate / Unit / Functional Group they belong to. After that, anyone viewing this page just picks the employee's name — their targets populate automatically, no need to also pick the affiliate, unit, or functional group. Expected columns, first row = headers, first sheet only for Excel files:<br>
+        <code>Employee Name, Business Affiliate, Business Unit, Functional Group</code><br>
+        The Affiliate / Unit / Functional Group names should match what's set up in <em>Manage Directory</em> — any that don't exist yet are created automatically.
+      </div>
+      <div class="drop-zone" id="employeeDropZone" onclick="document.getElementById('employeeFileInput').click()">
+        📄 Click to choose a .xlsx, .xls, or .csv file, or drag one here
+      </div>
+      <input type="file" id="employeeFileInput" accept=".csv,.xlsx,.xls" onchange="handleEmployeeImportFile(this.files[0])">
+      <div id="employeeImportStatus" style="font-size:.82em;color:var(--text2);margin-bottom:16px;"></div>
+
+      <div class="form-row">
+        <label>Add a single employee</label>
+        <div class="form-grid2">
+          <input id="empName" placeholder="Employee name">
+          <select id="empCompanySelect" onchange="onEmpCompanyChange()"></select>
+        </div>
+        <div class="form-grid2" style="margin-top:8px;">
+          <select id="empUnitSelect" onchange="onEmpUnitChange()"></select>
+          <select id="empFuncSelect"></select>
+        </div>
+        <button class="mbtn" style="margin-top:10px;background:var(--navy);color:#fff;border-color:var(--navy);" onclick="addSingleEmployee()">+ Add Employee</button>
+      </div>
+
+      <div style="font-size:.72em;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin:18px 0 8px;">Current Roster (<span id="employeeCount">0</span>)</div>
+      <div class="dir-list" id="employeeList"></div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn" style="background:var(--card2);color:var(--text2);border-color:var(--border2);" onclick="downloadEmployeeTemplate()">Download blank template</button>
+      <button class="mbtn" style="background:var(--navy);color:#fff;border-color:var(--navy);" onclick="closeModal('employeeModal')">Done</button>
+    </div>
+  </div>
+</div>
+
 <script>
 const STORAGE_KEY = 'pgb_goal_codex_v1';
 const ADMIN_SESSION_KEY = 'pgb_goal_codex_admin';
@@ -513,9 +562,16 @@ const DEFAULT_ADMIN_PASSCODE = 'PGBadmin2026'; // only used until an admin sets 
 const RUBRIC_LABELS = ['Unsatisfactory','Needs Development','Meets Expectations','Exceeds Expectations','Outstanding'];
 const RUBRIC_COLORS = ['var(--l1)','var(--l2)','var(--l3)','var(--l4)','var(--l5)'];
 const CSV_HEADERS = ['Company','Business Unit','Functional Unit','Strategic Goal','KPI','Deliverable','Weight (%)','Criteria L1 - Unsatisfactory','Criteria L2 - Needs Development','Criteria L3 - Meets Expectations','Criteria L4 - Exceeds Expectations','Criteria L5 - Outstanding'];
+const EMPLOYEES_KEY = 'pgb_goal_codex_employees_v1';
+const EMPLOYEE_CSV_HEADERS = ['Employee Name','Business Affiliate','Business Unit','Functional Group'];
 
 let entries = [];
 let usingSample = false;
+// Employee → (Affiliate, Unit, Functional Group) roster, uploaded once by an admin.
+// Unlike `entries`/`directory` there is no "sample roster" fallback, so an empty
+// array here is always a legitimate, non-confusing starting state — no cloud-await
+// dance is needed for it the way there is for entries/directory.
+let employees = [];
 // True while this device has no local copy AND is still waiting on the
 // first cloud pull to resolve. While true, the UI shows a "loading" state
 // instead of either blank content or (worse) generic sample rows — showing
@@ -704,6 +760,11 @@ function applyRemoteData(data){
     localStorage.setItem(DIRECTORY_KEY, JSON.stringify(directory));
     changed = true;
   }
+  if (data && Array.isArray(data.employees)){
+    employees = data.employees;
+    localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(employees));
+    changed = true;
+  }
   if (data && isHash(data.adminPasscodeHash)){
     localStorage.setItem(ADMIN_PASSCODE_KEY, data.adminPasscodeHash);
   }
@@ -754,10 +815,11 @@ async function pushToCloud(){
     const payload = {
       entries,
       directory,
+      employees,
       adminPasscodeHash: await getAdminPasscodeHash(),
       updatedAt: Date.now()
     };
-    const seqAtPush = _localChangeSeq; // whatever's in `entries`/`directory` right now is about to be sent
+    const seqAtPush = _localChangeSeq; // whatever's in `entries`/`directory`/`employees` right now is about to be sent
     _lastKnownUpdatedAt = payload.updatedAt; // set before the write so our own echo is recognized and skipped
     await _fbRef.set(payload);
     _syncedChangeSeq = seqAtPush; // safe again to accept remote snapshots, unless another edit happened meanwhile
@@ -877,6 +939,7 @@ function applyAdminUI(){
   document.getElementById('adminEntryBtn').style.display = admin ? 'inline-flex' : 'none';
   document.getElementById('adminImportBtn').style.display = admin ? 'inline-flex' : 'none';
   document.getElementById('adminDirBtn').style.display = admin ? 'inline-flex' : 'none';
+  document.getElementById('adminEmployeeBtn').style.display = admin ? 'inline-flex' : 'none';
   document.getElementById('adminTemplateBtn').style.display = admin ? 'inline-flex' : 'none';
   document.getElementById('adminClearSampleBtn').style.display = admin ? 'inline-flex' : 'none';
   document.getElementById('adminChangePwBtn').style.display = admin ? 'inline-flex' : 'none';
@@ -982,12 +1045,23 @@ function resolveAwaitingCloud(){
   if (!awaitingCloud) return;
   awaitingCloud = false;
   if (!entries.length){
+    // Cloud genuinely has nothing (true first-ever run) or the pull failed —
+    // only now is it safe to seed the sample set, and its matching directory,
+    // and let this become the real starting state (saveDirectory()/persist()
+    // both push, but there's nothing legitimate to clobber at this point).
     entries = SAMPLE_ENTRIES.map(s => ({
       id: uid(), company:s.company, businessUnit:s.businessUnit, functionalUnit:s.functionalUnit,
       strategicGoal:s.strategicGoal, kpi:s.kpi, deliverable:s.deliverable, weight:s.weight,
       c1:s.c[0], c2:s.c[1], c3:s.c[2], c4:s.c[3], c5:s.c[4], rating:null, remarks:''
     }));
     usingSample = true;
+    if (!directory.affiliates.length){ directory = defaultDirectory(); saveDirectory(); }
+  } else if (!directory.affiliates.length){
+    // Real cloud entries arrived but no directory came with them (e.g. older
+    // data saved before the directory feature existed) — rebuild filters
+    // from the real entries instead of leaving the dropdowns empty.
+    directory = buildDirectoryFromList(entries);
+    saveDirectory();
   }
   populateFilters();
   renderGoals();
@@ -1031,9 +1105,10 @@ let _dirAffiliate = null;   // name of affiliate currently drilled into
 let _dirUnit = null;        // name of unit currently drilled into
 let _dirFunc = null;        // name of functional group currently drilled into
 
-function defaultDirectory(){
+function buildDirectoryFromList(list){
   const tree = {};
-  SAMPLE_ENTRIES.forEach(s=>{
+  list.forEach(s=>{
+    if (!s.company || !s.businessUnit || !s.functionalUnit) return;
     tree[s.company] = tree[s.company] || {};
     tree[s.company][s.businessUnit] = tree[s.company][s.businessUnit] || {};
     const goals = tree[s.company][s.businessUnit][s.functionalUnit] = tree[s.company][s.businessUnit][s.functionalUnit] || [];
@@ -1047,7 +1122,19 @@ function defaultDirectory(){
     }))
   })) };
 }
+function defaultDirectory(){ return buildDirectoryFromList(SAMPLE_ENTRIES); }
 
+// IMPORTANT — this mirrors the "don't guess, wait for the cloud" pattern loadData()/
+// resolveAwaitingCloud() already use for `entries`. It used to NOT do this: any brand
+// new device/browser (no DIRECTORY_KEY in localStorage yet) fell back to the sample
+// directory immediately AND called saveDirectory(), which marks a "local change" and
+// schedules a push to Firebase — before the real cloud pull even had a chance to
+// finish. That premature "local change" flag then made pullFromCloud() think an
+// unsynced edit was in flight, so it SKIPPED applying the real cloud data — which in
+// turn left `entries` empty and made it fall back to the sample set too — and ~500ms
+// later the debounced push fired and overwrote the shared cloud copy with that sample
+// data. That's exactly the "resets to the built-in sample of companies and targets"
+// bug, and it could be triggered just by opening the page fresh on any new device.
 function loadDirectory(){
   try{
     const saved = JSON.parse(localStorage.getItem(DIRECTORY_KEY)||'null');
@@ -1060,10 +1147,231 @@ function loadDirectory(){
       return;
     }
   }catch(e){}
+  if (firebaseReady()){
+    // No local copy on this device. Show an empty directory for now — do NOT
+    // save/push it — and let resolveAwaitingCloud() decide the truth once the
+    // initial pull settles (same timing loadData() already uses for entries).
+    directory = { affiliates: [] };
+    return;
+  }
+  // Firebase truly isn't available (unconfigured/offline) — a local default is the
+  // best we can do, and saveDirectory() is safe here since schedulePush() no-ops
+  // when firebaseReady() is false, so nothing actually gets pushed.
   directory = defaultDirectory();
   saveDirectory();
 }
 function saveDirectory(){ localStorage.setItem(DIRECTORY_KEY, JSON.stringify(directory)); markLocalChange(); schedulePush(); }
+
+/* ---------- Employee roster (Employee → Affiliate/Unit/Functional Group), admin-managed ---------- */
+function loadEmployees(){
+  try{
+    const raw = localStorage.getItem(EMPLOYEES_KEY);
+    if (raw){
+      const saved = JSON.parse(raw);
+      if (Array.isArray(saved)){ employees = saved; return; }
+    }
+  }catch(e){}
+  employees = []; // an empty roster is a perfectly normal starting state — no cloud-await needed
+}
+function persistEmployees(){
+  localStorage.setItem(EMPLOYEES_KEY, JSON.stringify(employees));
+  markLocalChange();
+  schedulePush();
+}
+
+function populateEmployeeFilter(){
+  const sel = document.getElementById('fEmployee');
+  if (!sel) return;
+  const prev = sel.value;
+  const sorted = [...employees].sort((a,b)=>a.name.localeCompare(b.name));
+  sel.innerHTML = `<option value="" disabled ${prev?'':'selected'}>Select an employee…</option>`
+    + sorted.map(e=>`<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('');
+  if (sorted.some(e=>e.id===prev)) sel.value = prev;
+  updateEmployeeVisibility();
+}
+
+// Non-admins with a roster loaded still SEE the Affiliate/Unit/Functional Group
+// fields (so it's clear what scope they're looking at) but can't touch them — those
+// three fields become a read-only, auto-filled reflection of whichever employee is
+// selected above. The only thing a non-admin picks is their name. Admins keep full
+// manual control of all three (e.g. to set up targets for a scope before anyone's
+// been assigned to it yet).
+function updateEmployeeVisibility(){
+  const hasEmployees = employees.length > 0;
+  const admin = isAdmin();
+  const lockScope = hasEmployees && !admin;
+
+  const employeeCard = document.getElementById('employeeCard');
+  if (employeeCard) employeeCard.style.display = hasEmployees ? 'block' : 'none';
+
+  const fCompany = document.getElementById('fCompany');
+  const fUnit = document.getElementById('fUnit');
+  const fFunc = document.getElementById('fFunc');
+  const company = fCompany ? fCompany.value : '';
+  const unit = fUnit ? fUnit.value : '';
+  // Same cascade rule onCompanyChange()/onUnitChange() already use for non-admins
+  // (can't pick Unit before Affiliate, can't pick Functional Group before Unit),
+  // just OR'd with the roster-driven lock so we don't regress that existing behavior.
+  if (fCompany) fCompany.disabled = lockScope;
+  if (fUnit) fUnit.disabled = lockScope || (!admin && !company);
+  if (fFunc) fFunc.disabled = lockScope || (!admin && !(company && unit));
+
+  const hint = document.getElementById('employeeHint');
+  if (hint) hint.textContent = admin
+    ? (hasEmployees ? 'Selecting an employee auto-fills the scope below — you can still change it manually.' : '')
+    : (hasEmployees ? 'These fill in automatically once you pick your name above.' : '');
+}
+
+const LAST_EMPLOYEE_KEY = 'pgb_goal_codex_last_employee_v1';
+function onEmployeeChange(){
+  const sel = document.getElementById('fEmployee');
+  const emp = employees.find(e=>e.id===sel.value);
+  const rateeInput = document.getElementById('fRateeName');
+  if (!emp){ if (rateeInput) rateeInput.readOnly = false; return; }
+  selectFilterScope(emp.company, emp.businessUnit, emp.functionalUnit);
+  if (rateeInput){
+    rateeInput.value = emp.name;
+    rateeInput.readOnly = true;
+    saveRateeName();
+  }
+  try{ localStorage.setItem(LAST_EMPLOYEE_KEY, emp.id); }catch(e){}
+}
+// Lets a returning employee land straight on their own targets instead of
+// re-picking their name every visit. Only meant to run once at startup —
+// calling it after every populateFilters() would fight with an admin's
+// subsequent manual dropdown choices.
+function restoreLastEmployeeSelection(){
+  if (!employees.length) return;
+  let lastId = null;
+  try{ lastId = localStorage.getItem(LAST_EMPLOYEE_KEY); }catch(e){}
+  if (!lastId) return;
+  const sel = document.getElementById('fEmployee');
+  if (!sel || ![...sel.options].some(o=>o.value===lastId)) return;
+  sel.value = lastId;
+  onEmployeeChange();
+}
+
+function populateEmployeeModal(){
+  const companySel = document.getElementById('empCompanySelect');
+  if (!companySel) return;
+  companySel.innerHTML = `<option value="">Select affiliate…</option>` + allAffiliateNames().map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
+  onEmpCompanyChange();
+  renderEmployeeList();
+}
+function onEmpCompanyChange(){
+  const co = document.getElementById('empCompanySelect').value;
+  document.getElementById('empUnitSelect').innerHTML = `<option value="">Select unit…</option>` + allUnitNames(co||null).map(u=>`<option value="${esc(u)}">${esc(u)}</option>`).join('');
+  onEmpUnitChange();
+}
+function onEmpUnitChange(){
+  const co = document.getElementById('empCompanySelect').value;
+  const u = document.getElementById('empUnitSelect').value;
+  document.getElementById('empFuncSelect').innerHTML = `<option value="">Select functional group…</option>` + allFuncNames(co||null, u||null).map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join('');
+}
+function addSingleEmployee(){
+  if (!isAdmin()) return;
+  const name = document.getElementById('empName').value.trim();
+  const company = document.getElementById('empCompanySelect').value;
+  const businessUnit = document.getElementById('empUnitSelect').value;
+  const functionalUnit = document.getElementById('empFuncSelect').value;
+  if (!name || !company || !businessUnit || !functionalUnit){ alert('Employee name, affiliate, unit, and functional group are all required.'); return; }
+  employees.push({ id: uid(), name, company, businessUnit, functionalUnit });
+  document.getElementById('empName').value = '';
+  persistEmployees();
+  populateEmployeeFilter();
+  renderEmployeeList();
+}
+function deleteEmployee(id){
+  if (!isAdmin()) return;
+  employees = employees.filter(e=>e.id!==id);
+  persistEmployees();
+  populateEmployeeFilter();
+  renderEmployeeList();
+}
+function renderEmployeeList(){
+  const list = document.getElementById('employeeList');
+  const countEl = document.getElementById('employeeCount');
+  if (countEl) countEl.textContent = employees.length;
+  if (!list) return;
+  if (!employees.length){
+    list.innerHTML = `<div class="dir-empty">No employees yet — import a file above or add one manually.</div>`;
+    return;
+  }
+  const sorted = [...employees].sort((a,b)=>a.name.localeCompare(b.name));
+  list.innerHTML = sorted.map(e=>`<div class="dir-row">
+    <input type="text" value="${esc(e.name)}" readonly style="flex:1.3;">
+    <input type="text" value="${esc([e.functionalUnit,e.businessUnit,e.company].filter(Boolean).join(' · '))}" readonly>
+    <button type="button" class="del" onclick="deleteEmployee('${jsStr(e.id)}')">🗑</button>
+  </div>`).join('');
+}
+function openEmployeeModal(){
+  if (!isAdmin()) return;
+  document.getElementById('employeeImportStatus').textContent = '';
+  populateEmployeeModal();
+  document.getElementById('employeeModal').classList.add('show');
+}
+
+function processEmployeeRows(rows, statusEl){
+  let added = 0, skipped = 0;
+  const imported = [];
+  rows.forEach(row=>{
+    const name = cell(row,'Employee Name');
+    const company = cell(row,'Business Affiliate');
+    const businessUnit = cell(row,'Business Unit');
+    const functionalUnit = cell(row,'Functional Group');
+    if (!name || !company || !businessUnit || !functionalUnit){ skipped++; return; }
+    imported.push({ id: uid(), name, company, businessUnit, functionalUnit });
+    added++;
+  });
+  // Re-importing the same roster (e.g. an updated headcount file) updates matching
+  // employees by name instead of creating duplicates.
+  imported.forEach(imp=>{
+    const idx = employees.findIndex(e=>e.name.trim().toLowerCase()===imp.name.trim().toLowerCase());
+    if (idx>=0) employees[idx] = Object.assign({}, employees[idx], imp, { id: employees[idx].id });
+    else employees.push(imp);
+    ensureDirectoryScope(imp.company, imp.businessUnit, imp.functionalUnit);
+  });
+  saveDirectory();
+  persistEmployees();
+  populateEmployeeFilter();
+  renderEmployeeList();
+  statusEl.textContent = `✅ Imported ${added} employee${added===1?'':'s'}${skipped?`, skipped ${skipped} (missing name, affiliate, unit, or functional group)`:''}.`;
+}
+
+function handleEmployeeImportFile(file){
+  if (!isAdmin()) return;
+  if (!file) return;
+  const statusEl = document.getElementById('employeeImportStatus');
+  const name = (file.name||'').toLowerCase();
+  if (name.endsWith('.xlsx') || name.endsWith('.xls')){
+    const reader = new FileReader();
+    reader.onload = function(e){
+      try{
+        const wb = XLSX.read(e.target.result, {type:'array'});
+        const sheet = wb.Sheets[wb.SheetNames[0]];
+        const rows = XLSX.utils.sheet_to_json(sheet, {defval:''});
+        if (!rows.length){ statusEl.textContent = '⚠️ That sheet looks empty — check it has a header row plus data.'; return; }
+        processEmployeeRows(rows, statusEl);
+      }catch(err){
+        statusEl.textContent = '❌ Could not read that Excel file: ' + err.message;
+      }
+    };
+    reader.onerror = function(){ statusEl.textContent = '❌ Could not read that file.'; };
+    reader.readAsArrayBuffer(file);
+  } else {
+    Papa.parse(file, {
+      header:true, skipEmptyLines:true,
+      complete: function(res){ processEmployeeRows(res.data, statusEl); },
+      error: function(err){ statusEl.textContent = '❌ Could not read that file: ' + err.message; }
+    });
+  }
+}
+
+function downloadEmployeeTemplate(){
+  if (!isAdmin()) return;
+  const csv = Papa.unparse([EMPLOYEE_CSV_HEADERS]);
+  triggerDownload(csv, 'employee_directory_template.csv');
+}
 
 function findAffiliate(name){ return directory.affiliates.find(a=>a.name===name) || null; }
 function findUnit(affName, unitName){ const a = findAffiliate(affName); return a ? (a.units.find(u=>u.name===unitName)||null) : null; }
@@ -1086,15 +1394,25 @@ function allGoalNames(affName, unitName, funcName){
   const f = findFuncGroup(affName, unitName, funcName);
   return f ? [...f.goals] : [];
 }
-// Called whenever an entry is saved/imported so the directory automatically picks up new Strategic Goals at the end of the sequence.
-function ensureDirectoryGoal(company, unit, func, goalName){
-  if (!company || !unit || !func || !goalName) return;
+// Ensures an Affiliate → Unit → Functional Group path exists in the directory
+// (creating any missing level), and returns that functional-group node. Shared by
+// ensureDirectoryGoal (below) and the employee-roster import/add (which needs the
+// scope to exist so it shows up in the filter dropdowns even before any target
+// entries have been added under it).
+function ensureDirectoryScope(company, unit, func){
+  if (!company || !unit || !func) return null;
   let a = findAffiliate(company);
   if (!a){ a = { name: company, units: [] }; directory.affiliates.push(a); }
   let u = a.units.find(x=>x.name===unit);
   if (!u){ u = { name: unit, funcGroups: [] }; a.units.push(u); }
   let f = u.funcGroups.find(x=>x.name===func);
   if (!f){ f = { name: func, goals: [] }; u.funcGroups.push(f); }
+  return f;
+}
+// Called whenever an entry is saved/imported so the directory automatically picks up new Strategic Goals at the end of the sequence.
+function ensureDirectoryGoal(company, unit, func, goalName){
+  const f = ensureDirectoryScope(company, unit, func);
+  if (!f || !goalName) return;
   if (!f.goals.includes(goalName)) f.goals.push(goalName);
 }
 
@@ -1108,6 +1426,7 @@ function populateFilters(){
   fCompany.innerHTML = allOpt + companies.map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
   if (companies.includes(prevCompany) || (admin && prevCompany==='')) fCompany.value = prevCompany;
   onCompanyChange(true);
+  populateEmployeeFilter();
 }
 
 function onCompanyChange(keepUnit){
@@ -1536,7 +1855,10 @@ function renderGoals(){
   }
   if (!isAdmin() && (!company || !unit || !func)){
     goalsSummaryEl.innerHTML = '';
-    content.innerHTML = `<div class="empty-state">
+    content.innerHTML = employees.length ? `<div class="empty-state">
+      <h3>Select your name</h3>
+      <div>Pick your name from the Employee dropdown on the left to see your targets.</div>
+    </div>` : `<div class="empty-state">
       <h3>Select an Affiliate, Unit, and Functional Group</h3>
       <div>Choose one specific option from each of the three dropdowns on the left to view deliverables. Viewing all affiliates at once isn't available.</div>
     </div>`;
@@ -1881,10 +2203,20 @@ document.addEventListener('DOMContentLoaded', function(){
     if (e.dataTransfer.files && e.dataTransfer.files[0]) handleImportFile(e.dataTransfer.files[0]);
   });
 
+  const edz = document.getElementById('employeeDropZone');
+  edz.addEventListener('dragover', e=>{ e.preventDefault(); edz.style.borderColor='var(--gold2)'; });
+  edz.addEventListener('dragleave', ()=>{ edz.style.borderColor=''; });
+  edz.addEventListener('drop', e=>{
+    e.preventDefault(); edz.style.borderColor='';
+    if (e.dataTransfer.files && e.dataTransfer.files[0]) handleEmployeeImportFile(e.dataTransfer.files[0]);
+  });
+
   loadData();
   loadDirectory();
+  loadEmployees();
   loadRateeName();
   populateFilters();
+  restoreLastEmployeeSelection();
   renderGoals();
   applyAdminUI();
   updateSyncBadge(firebaseReady() ? 'syncing' : 'unconfigured');
