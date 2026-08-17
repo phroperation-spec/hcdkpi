@@ -130,6 +130,8 @@ input[type=file]{display:none;}
 }
 .tag.co{color:var(--navy2);border-color:#cdd6ee;background:#eef1fb;}
 .tag.wt{color:var(--navy);border-color:var(--gold2);background:#fbf3dc;font-weight:700;}
+.tag.leader{color:#7a1f3d;border-color:#e0a8bd;background:#fbe9f0;font-weight:700;}
+.emp-leader-badge{font-size:.64em;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:#7a1f3d;background:#fbe9f0;border:1px solid #e0a8bd;border-radius:20px;padding:2px 8px;margin-left:6px;white-space:nowrap;}
 .entry-kpi{font-size:.72em;font-weight:700;letter-spacing:.03em;text-transform:uppercase;color:var(--text3);}
 
 .entry-deliverable{
@@ -328,7 +330,9 @@ input[type=file]{display:none;}
         <button class="mbtn" onclick="saveAsPDF(event)">⬇ Save as PDF</button>
         <button class="mbtn primary" id="adminTemplateBtn" onclick="downloadTemplate()" style="display:none;">Template</button>
         <button class="mbtn" id="adminChangePwBtn" onclick="openChangePasscodeModal()" style="display:none;">🔑 Change Passcode</button>
+        <button class="mbtn" id="adminChangeLeaderPwBtn" onclick="openChangeLeaderPasscodeModal()" style="display:none;">🔑 Change Leader Passcode</button>
         <button class="mbtn" id="syncBadge" onclick="manualSync()" title="Click to sync now">☁ —</button>
+        <button class="mbtn" id="leaderLockBtn" onclick="toggleLeaderMode()">🎖 Leader Access</button>
         <button class="mbtn" id="adminLockBtn" onclick="toggleAdminMode()">🔒 Admin</button>
       </div>
       <button class="mbtn" id="resetAllBtn" onclick="resetAllRatings()" style="background:var(--blue);border-color:var(--blue);color:#fff;">↺ Reset All Ratings</button>
@@ -392,7 +396,8 @@ input[type=file]{display:none;}
     <div class="modal-body">
       <div class="template-note">
         Expected columns (same as the performance system's bulk‑import template), first row = headers, first sheet only for Excel files:<br>
-        <code>Company, Business Unit, Functional Unit, Strategic Goal, KPI, Deliverable, Weight (%), Criteria L1 - Unsatisfactory, Criteria L2 - Needs Development, Criteria L3 - Meets Expectations, Criteria L4 - Exceeds Expectations, Criteria L5 - Outstanding</code>
+        <code>Company, Business Unit, Functional Unit, Strategic Goal, KPI, Deliverable, Weight (%), Criteria L1 - Unsatisfactory, Criteria L2 - Needs Development, Criteria L3 - Meets Expectations, Criteria L4 - Exceeds Expectations, Criteria L5 - Outstanding, Leadership Target (Yes/No)</code><br>
+        The last column is optional — leave it blank or "No" for a regular target; put "Yes" to mark it as a Leadership Target, which only shows up in Admin mode (and Leader Access) and doesn't need a Functional Unit — leave that column blank too, since Leadership Targets apply to the whole Business Unit.
       </div>
       <div class="drop-zone" id="dropZone" onclick="document.getElementById('csvFileInput').click()">
         📄 Click to choose a .xlsx, .xls, or .csv file, or drag one here
@@ -429,7 +434,7 @@ input[type=file]{display:none;}
         </div>
       </div>
       <div class="form-grid2">
-        <div class="form-row">
+        <div class="form-row" id="mFuncRow">
           <label>Functional Group</label>
           <select id="mFuncSelect" onchange="onManualFuncChange()"></select>
           <input id="mFuncCustom" placeholder="Type new functional group name…" style="display:none;margin-top:6px;">
@@ -439,6 +444,12 @@ input[type=file]{display:none;}
       <div class="form-row"><label>Strategic Goal</label><input id="mGoal" placeholder="e.g. Operational Excellence"></div>
       <div class="form-row"><label>KPI</label><input id="mKpi" placeholder="e.g. Cycle Time Reduction"></div>
       <div class="form-row"><label>Deliverable</label><textarea id="mDeliverable" rows="2" placeholder="Expected deliverable description…"></textarea></div>
+      <div class="form-row">
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:.85em;color:var(--text);cursor:pointer;">
+          <input type="checkbox" id="mLeaderOnly" onchange="onManualLeaderToggle()" style="width:auto;padding:0;border:none;background:transparent;flex-shrink:0;">
+          🎖 Leadership Target — scoped to the Business Unit only (no Functional Group needed), only visible in Admin mode
+        </label>
+      </div>
       <div class="form-row"><label>Rubric — 5 Levels</label>
         <div class="form-grid5">
           <textarea id="mC1" rows="2" placeholder="L1 — Unsatisfactory"></textarea>
@@ -494,6 +505,44 @@ input[type=file]{display:none;}
   </div>
 </div>
 
+<!-- Leader Access Unlock Modal -->
+<div class="modal-overlay" id="leaderModal">
+  <div class="modal-box" style="max-width:400px;">
+    <div class="modal-head"><h3>Leader Access</h3><button class="modal-close" onclick="closeModal('leaderModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row">
+        <label>Leader Passcode</label>
+        <input id="leaderPasscodeInput" type="password" placeholder="Enter leader passcode" onkeydown="if(event.key==='Enter')submitLeaderPasscode()">
+      </div>
+      <div id="leaderError" style="font-size:.8em;color:var(--l1);display:none;">Incorrect passcode.</div>
+      <div style="font-size:.76em;color:var(--text3);line-height:1.55;margin-top:8px;">Leader Access is separate from Admin — it lets you view the 🎖 Leadership Targets an admin has set up for your scope (and rate yourself on them, same as any target). It doesn't let you add, import, or edit anything — only an admin can do that.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn" style="background:var(--card2);color:var(--text2);border-color:var(--border2);" onclick="closeModal('leaderModal')">Cancel</button>
+      <button class="mbtn" style="background:var(--navy);color:#fff;border-color:var(--navy);" onclick="submitLeaderPasscode()">Unlock</button>
+    </div>
+  </div>
+</div>
+
+<!-- Change Leader Passcode Modal (admin-only) -->
+<div class="modal-overlay" id="changeLeaderPasscodeModal">
+  <div class="modal-box" style="max-width:420px;">
+    <div class="modal-head"><h3>Change Leader Passcode</h3><button class="modal-close" onclick="closeModal('changeLeaderPasscodeModal')">✕</button></div>
+    <div class="modal-body">
+      <div class="form-row"><label>Current Leader Passcode</label><input id="lpCurrent" type="password" placeholder="Current leader passcode"></div>
+      <div class="form-row"><label>New Leader Passcode</label><input id="lpNew" type="password" placeholder="At least 4 characters"></div>
+      <div class="form-row"><label>Confirm New Leader Passcode</label><input id="lpConfirm" type="password" placeholder="Re-enter new passcode" onkeydown="if(event.key==='Enter')submitChangeLeaderPasscode()"></div>
+      <div id="lpError" style="font-size:.8em;color:var(--l1);display:none;"></div>
+      <div id="lpSuccess" style="font-size:.8em;color:var(--l5);font-weight:600;display:none;"></div>
+      <div style="font-size:.76em;color:var(--text3);line-height:1.55;margin-top:8px;">This is the passcode leaders use to unlock "🎖 Leader Access" — separate from the Admin passcode. Share the new one with your leaders directly; it syncs to every device automatically.</div>
+    </div>
+    <div class="modal-foot">
+      <button class="mbtn" style="background:var(--card2);color:var(--text2);border-color:var(--border2);" onclick="closeModal('changeLeaderPasscodeModal')">Close</button>
+      <button class="mbtn" style="background:var(--navy);color:#fff;border-color:var(--navy);" onclick="submitChangeLeaderPasscode()">Save New Passcode</button>
+    </div>
+  </div>
+</div>
+
 <!-- Directory Manager Modal -->
 <div class="modal-overlay" id="directoryModal">
   <div class="modal-box" style="max-width:560px;">
@@ -522,8 +571,8 @@ input[type=file]{display:none;}
     <div class="modal-body">
       <div class="template-note">
         Upload the list of employees once, mapped to the Business Affiliate / Unit / Functional Group they belong to. After that, anyone viewing this page just picks the employee's name — their targets populate automatically, no need to also pick the affiliate, unit, or functional group. Expected columns, first row = headers, first sheet only for Excel files:<br>
-        <code>Employee Name, Business Affiliate, Business Unit, Functional Group</code><br>
-        The Affiliate / Unit / Functional Group names should match what's set up in <em>Manage Directory</em> — any that don't exist yet are created automatically.
+        <code>Employee Name, Business Affiliate, Business Unit, Functional Group, Leader (Yes/No)</code><br>
+        The Affiliate / Unit / Functional Group names should match what's set up in <em>Manage Directory</em> — any that don't exist yet are created automatically. The last column is optional — mark "Yes" to tag someone as a leader (shown as a 🎖 badge below); leaders only need Business Affiliate + Business Unit, so their Functional Group column can be left blank. Leadership Targets themselves are set per-entry via the 🎖 Leadership Target checkbox in Add/Import Entry, and only show in Admin mode or Leader Access.
       </div>
       <div class="drop-zone" id="employeeDropZone" onclick="document.getElementById('employeeFileInput').click()">
         📄 Click to choose a .xlsx, .xls, or .csv file, or drag one here
@@ -532,16 +581,23 @@ input[type=file]{display:none;}
       <div id="employeeImportStatus" style="font-size:.82em;color:var(--text2);margin-bottom:16px;"></div>
 
       <div class="form-row">
-        <label>Add a single employee</label>
+        <label id="empFormLabel">Add a single employee</label>
         <div class="form-grid2">
           <input id="empName" placeholder="Employee name">
           <select id="empCompanySelect" onchange="onEmpCompanyChange()"></select>
         </div>
         <div class="form-grid2" style="margin-top:8px;">
           <select id="empUnitSelect" onchange="onEmpUnitChange()"></select>
-          <select id="empFuncSelect"></select>
+          <div id="empFuncWrap"><select id="empFuncSelect"></select></div>
         </div>
-        <button class="mbtn" style="margin-top:10px;background:var(--navy);color:#fff;border-color:var(--navy);" onclick="addSingleEmployee()">+ Add Employee</button>
+        <label style="display:flex;align-items:center;gap:8px;text-transform:none;letter-spacing:0;font-size:.85em;color:var(--text);cursor:pointer;margin-top:10px;">
+          <input type="checkbox" id="empIsLeader" onchange="onEmpLeaderToggle()" style="width:auto;padding:0;border:none;background:transparent;flex-shrink:0;">
+          🎖 This person is a leader — leaders are scoped to a Business Unit only, no Functional Group needed
+        </label>
+        <div style="display:flex;gap:8px;margin-top:10px;">
+          <button class="mbtn" id="empSaveBtn" style="background:var(--navy);color:#fff;border-color:var(--navy);" onclick="saveSingleEmployee()">+ Add Employee</button>
+          <button class="mbtn" id="empCancelEditBtn" style="display:none;background:var(--card2);color:var(--text2);border-color:var(--border2);" onclick="cancelEmployeeEdit()">Cancel Edit</button>
+        </div>
       </div>
 
       <div style="font-size:.72em;font-weight:700;text-transform:uppercase;letter-spacing:.05em;color:var(--text3);margin:18px 0 8px;">Current Roster (<span id="employeeCount">0</span>)</div>
@@ -559,11 +615,19 @@ const STORAGE_KEY = 'pgb_goal_codex_v1';
 const ADMIN_SESSION_KEY = 'pgb_goal_codex_admin';
 const ADMIN_PASSCODE_KEY = 'pgb_goal_codex_admin_pw';
 const DEFAULT_ADMIN_PASSCODE = 'PGBadmin2026'; // only used until an admin sets their own passcode
+// Leader Access is a separate, view-only login: it lets a leader see the 🎖 Leadership
+// Targets an admin/executive has set up for their scope, without granting any of the
+// add/import/edit rights Admin mode has. Admin still creates and manages every target;
+// this just gives leaders their own way in to view (and self-rate, same as any employee
+// already can) the ones meant for them.
+const LEADER_SESSION_KEY = 'pgb_goal_codex_leader';
+const LEADER_PASSCODE_KEY = 'pgb_goal_codex_leader_pw';
+const DEFAULT_LEADER_PASSCODE = 'PGBleader2026'; // only used until an admin sets a real one
 const RUBRIC_LABELS = ['Unsatisfactory','Needs Development','Meets Expectations','Exceeds Expectations','Outstanding'];
 const RUBRIC_COLORS = ['var(--l1)','var(--l2)','var(--l3)','var(--l4)','var(--l5)'];
-const CSV_HEADERS = ['Company','Business Unit','Functional Unit','Strategic Goal','KPI','Deliverable','Weight (%)','Criteria L1 - Unsatisfactory','Criteria L2 - Needs Development','Criteria L3 - Meets Expectations','Criteria L4 - Exceeds Expectations','Criteria L5 - Outstanding'];
+const CSV_HEADERS = ['Company','Business Unit','Functional Unit','Strategic Goal','KPI','Deliverable','Weight (%)','Criteria L1 - Unsatisfactory','Criteria L2 - Needs Development','Criteria L3 - Meets Expectations','Criteria L4 - Exceeds Expectations','Criteria L5 - Outstanding','Leadership Target (Yes/No)'];
 const EMPLOYEES_KEY = 'pgb_goal_codex_employees_v1';
-const EMPLOYEE_CSV_HEADERS = ['Employee Name','Business Affiliate','Business Unit','Functional Group'];
+const EMPLOYEE_CSV_HEADERS = ['Employee Name','Business Affiliate','Business Unit','Functional Group','Leader (Yes/No)'];
 
 let entries = [];
 let usingSample = false;
@@ -768,11 +832,24 @@ function applyRemoteData(data){
   if (data && isHash(data.adminPasscodeHash)){
     localStorage.setItem(ADMIN_PASSCODE_KEY, data.adminPasscodeHash);
   }
+  if (data && isHash(data.leaderPasscodeHash)){
+    localStorage.setItem(LEADER_PASSCODE_KEY, data.leaderPasscodeHash);
+  }
   if (data && data.updatedAt){
     _lastKnownUpdatedAt = data.updatedAt;
     try{ localStorage.setItem(LOCAL_UPDATED_KEY, String(data.updatedAt)); }catch(e){}
   }
-  if (changed){ populateFilters(); renderGoals(); }
+  // Fix up any directory gaps in what just came down from the cloud (e.g. a leader
+  // or Leadership Target saved by another device before this bug was fixed).
+  if (changed && repairDirectoryFromData()) saveDirectory();
+  if (changed){
+    populateFilters();
+    renderGoals();
+    // Employees (and/or their targets) may have just arrived late from the cloud —
+    // re-resolve whatever employee is selected (or was remembered from last time)
+    // so "Individual Being Rated" and the scope fields don't go stale/mismatched.
+    resyncEmployeeScope();
+  }
   return changed;
 }
 
@@ -817,6 +894,7 @@ async function pushToCloud(){
       directory,
       employees,
       adminPasscodeHash: await getAdminPasscodeHash(),
+      leaderPasscodeHash: await getLeaderPasscodeHash(),
       updatedAt: Date.now()
     };
     const seqAtPush = _localChangeSeq; // whatever's in `entries`/`directory`/`employees` right now is about to be sent
@@ -890,8 +968,9 @@ const SAMPLE_ENTRIES = [
 
 function uid(){ return 'e' + Math.random().toString(36).slice(2,10); }
 
-/* ---------- Admin mode (view vs. add/import) ---------- */
+/* ---------- Admin mode (view vs. add/import) & Leader Access (view-only) ---------- */
 function isAdmin(){ return sessionStorage.getItem(ADMIN_SESSION_KEY) === 'true'; }
+function isLeaderUnlocked(){ return sessionStorage.getItem(LEADER_SESSION_KEY) === 'true'; }
 
 function isHash(v){ return typeof v === 'string' && /^[0-9a-f]{64}$/.test(v); }
 
@@ -905,33 +984,63 @@ async function sha256Hex(str){
   }
 }
 
+// Generic passcode helpers shared by Admin and Leader Access — same hashing/migration
+// behavior, parameterized by which storage key + default they operate on.
 // Returns the stored passcode as a SHA-256 hash, transparently migrating any
 // older plaintext passcode (or the default) to a hash the first time it's needed.
-async function getAdminPasscodeHash(){
-  const stored = localStorage.getItem(ADMIN_PASSCODE_KEY);
+async function getPasscodeHash(storageKey, defaultPlain){
+  const stored = localStorage.getItem(storageKey);
   if (isHash(stored)) return stored;
-  const plainOrDefault = stored || DEFAULT_ADMIN_PASSCODE;
+  const plainOrDefault = stored || defaultPlain;
   const hash = await sha256Hex(plainOrDefault);
-  if (hash){ localStorage.setItem(ADMIN_PASSCODE_KEY, hash); }
+  if (hash){ localStorage.setItem(storageKey, hash); }
   return hash;
 }
-
-async function checkAdminPasscode(candidate){
+async function checkPasscode(storageKey, defaultPlain, candidate){
   const candidateHash = await sha256Hex(candidate);
   if (candidateHash){
-    const storedHash = await getAdminPasscodeHash();
+    const storedHash = await getPasscodeHash(storageKey, defaultPlain);
     if (storedHash) return candidateHash === storedHash;
   }
   // Crypto API unavailable — fall back to the old plaintext comparison.
-  const stored = localStorage.getItem(ADMIN_PASSCODE_KEY);
-  return candidate === (stored || DEFAULT_ADMIN_PASSCODE);
+  const stored = localStorage.getItem(storageKey);
+  return candidate === (stored || defaultPlain);
 }
-
-async function setAdminPasscode(pw){
+async function setPasscode(storageKey, pw){
   const hash = await sha256Hex(pw);
-  localStorage.setItem(ADMIN_PASSCODE_KEY, hash || pw);
+  localStorage.setItem(storageKey, hash || pw);
   markLocalChange();
   schedulePush();
+}
+
+function getAdminPasscodeHash(){ return getPasscodeHash(ADMIN_PASSCODE_KEY, DEFAULT_ADMIN_PASSCODE); }
+function checkAdminPasscode(candidate){ return checkPasscode(ADMIN_PASSCODE_KEY, DEFAULT_ADMIN_PASSCODE, candidate); }
+function setAdminPasscode(pw){ return setPasscode(ADMIN_PASSCODE_KEY, pw); }
+
+function getLeaderPasscodeHash(){ return getPasscodeHash(LEADER_PASSCODE_KEY, DEFAULT_LEADER_PASSCODE); }
+function checkLeaderPasscode(candidate){ return checkPasscode(LEADER_PASSCODE_KEY, DEFAULT_LEADER_PASSCODE, candidate); }
+function setLeaderPasscode(pw){ return setPasscode(LEADER_PASSCODE_KEY, pw); }
+
+// Called after Admin/Leader access changes state — that changes which pool of names
+// is selectable in the Employee dropdown (see populateEmployeeFilter()). Restores a
+// previously-viewed name if it's still in the new pool; otherwise clears the resolved
+// scope rather than leaving stale Affiliate/Unit/Functional Group values on screen
+// from someone who's no longer selectable from here.
+function resyncEmployeeScope(){
+  restoreLastEmployeeSelection();
+  const sel = document.getElementById('fEmployee');
+  if (!sel || !sel.value){
+    document.getElementById('fCompany').value = '';
+    onCompanyChange(false); // cascades through Unit/Functional Group and re-renders
+    const rateeInput = document.getElementById('fRateeName');
+    if (rateeInput) rateeInput.readOnly = false;
+  } else {
+    // An employee is already selected (either just restored above, or was already
+    // chosen before this data arrived) — re-run the full employee-change flow so
+    // the scope fields and "Individual Being Rated" stay pinned to that employee
+    // rather than possibly reflecting an older/mismatched value.
+    onEmployeeChange();
+  }
 }
 
 function applyAdminUI(){
@@ -943,11 +1052,20 @@ function applyAdminUI(){
   document.getElementById('adminTemplateBtn').style.display = admin ? 'inline-flex' : 'none';
   document.getElementById('adminClearSampleBtn').style.display = admin ? 'inline-flex' : 'none';
   document.getElementById('adminChangePwBtn').style.display = admin ? 'inline-flex' : 'none';
+  document.getElementById('adminChangeLeaderPwBtn').style.display = admin ? 'inline-flex' : 'none';
   document.getElementById('adminExportBtn').style.display = admin ? 'inline-flex' : 'none';
   const lockBtn = document.getElementById('adminLockBtn');
   lockBtn.textContent = admin ? '🔓 Lock' : '🔒 Admin';
-  populateFilters();
-  renderGoals();
+  populateFilters(); // rebuilds Affiliate/Unit/Functional Group + Employee dropdown for the current admin state
+  resyncEmployeeScope();
+}
+
+function applyLeaderUI(){
+  const unlocked = isLeaderUnlocked();
+  const btn = document.getElementById('leaderLockBtn');
+  if (btn) btn.textContent = unlocked ? '🔓 Leader (Lock)' : '🎖 Leader Access';
+  populateEmployeeFilter(); // leader-only vs staff-only roster depends on this toggle
+  resyncEmployeeScope();
 }
 
 function toggleAdminMode(){
@@ -998,6 +1116,58 @@ async function submitChangePasscode(){
   okEl.textContent = '✅ Passcode updated. This will sync to your other devices too.';
   okEl.style.display = 'block';
   ['cpCurrent','cpNew','cpConfirm'].forEach(id=>document.getElementById(id).value='');
+}
+
+// ---- Leader Access: separate, view-only login (no admin passcode needed) ----
+function toggleLeaderMode(){
+  if (isLeaderUnlocked()){
+    sessionStorage.removeItem(LEADER_SESSION_KEY);
+    applyLeaderUI();
+  } else {
+    document.getElementById('leaderPasscodeInput').value = '';
+    document.getElementById('leaderError').style.display = 'none';
+    document.getElementById('leaderModal').classList.add('show');
+    setTimeout(()=>document.getElementById('leaderPasscodeInput').focus(), 50);
+  }
+}
+
+async function submitLeaderPasscode(){
+  const val = document.getElementById('leaderPasscodeInput').value;
+  const ok = await checkLeaderPasscode(val);
+  if (ok){
+    sessionStorage.setItem(LEADER_SESSION_KEY, 'true');
+    closeModal('leaderModal');
+    applyLeaderUI();
+  } else {
+    document.getElementById('leaderError').style.display = 'block';
+  }
+}
+
+// Only an admin can set/change the Leader passcode — leaders themselves just use it to view.
+function openChangeLeaderPasscodeModal(){
+  if (!isAdmin()) return;
+  ['lpCurrent','lpNew','lpConfirm'].forEach(id=>document.getElementById(id).value='');
+  document.getElementById('lpError').style.display = 'none';
+  document.getElementById('lpSuccess').style.display = 'none';
+  document.getElementById('changeLeaderPasscodeModal').classList.add('show');
+}
+
+async function submitChangeLeaderPasscode(){
+  if (!isAdmin()) return;
+  const cur = document.getElementById('lpCurrent').value;
+  const next = document.getElementById('lpNew').value;
+  const confirmVal = document.getElementById('lpConfirm').value;
+  const errEl = document.getElementById('lpError');
+  const okEl = document.getElementById('lpSuccess');
+  errEl.style.display = 'none'; okEl.style.display = 'none';
+  const curOk = await checkLeaderPasscode(cur);
+  if (!curOk){ errEl.textContent = 'Current Leader passcode is incorrect.'; errEl.style.display='block'; return; }
+  if (!next || next.length < 4){ errEl.textContent = 'New passcode must be at least 4 characters.'; errEl.style.display='block'; return; }
+  if (next !== confirmVal){ errEl.textContent = 'New passcode and confirmation don\'t match.'; errEl.style.display='block'; return; }
+  await setLeaderPasscode(next);
+  okEl.textContent = '✅ Leader passcode updated. Share the new one with your leaders — this syncs to your other devices too.';
+  okEl.style.display = 'block';
+  ['lpCurrent','lpNew','lpConfirm'].forEach(id=>document.getElementById(id).value='');
 }
 
 function loadData(){
@@ -1063,6 +1233,10 @@ function resolveAwaitingCloud(){
     directory = buildDirectoryFromList(entries);
     saveDirectory();
   }
+  // Catches anything buildDirectoryFromList()/the branches above missed — notably
+  // Business-Unit-only scopes (leaders, Leadership Targets) that have no Functional
+  // Group, which buildDirectoryFromList() skips by design.
+  if (repairDirectoryFromData()) saveDirectory();
   populateFilters();
   renderGoals();
 }
@@ -1092,6 +1266,17 @@ function clearSample(){
 }
 
 function esc(s){ return String(s==null?'':s).replace(/[&<>"']/g, c => ({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[c])); }
+
+// Affiliate/Unit/Functional Group values come from several independent entry
+// points — manual admin forms, KPI CSV import, employee Excel import — so it's
+// easy for the "same" scope to end up saved with a stray trailing space or
+// different capitalization on one side (e.g. an employee's roster row says
+// "SKILLS" / "TVET" but a Leadership Target was typed in as "Skills " / "tvet").
+// Everything LOOKS identical in the UI, but a plain === comparison treats them
+// as different scopes and a leader's targets silently fail to match anything.
+// normKey() is used only for comparisons, never for display, so this closes
+// that gap without changing what's shown on screen.
+function normKey(s){ return String(s==null?'':s).trim().toLowerCase(); }
 
 /* ---------- Directory (fixed Affiliate → Unit → Functional Group tree, admin-managed) ---------- */
 function distinctVals(list, key){
@@ -1179,30 +1364,51 @@ function persistEmployees(){
   schedulePush();
 }
 
+// Which roster shows up in the Employee dropdown depends on who's logged in:
+// Leader Access shows only the leadership team (that's the whole point of the
+// separate login); everyone else sees only regular staff, since a leader has no
+// functional-group-scoped staff targets to show them anyway. Admin always sees
+// the full roster, since admin can browse either kind directly.
 function populateEmployeeFilter(){
   const sel = document.getElementById('fEmployee');
   if (!sel) return;
   const prev = sel.value;
-  const sorted = [...employees].sort((a,b)=>a.name.localeCompare(b.name));
-  sel.innerHTML = `<option value="" disabled ${prev?'':'selected'}>Select an employee…</option>`
+  const admin = isAdmin();
+  const leader = isLeaderUnlocked();
+  const pool = admin ? employees : employees.filter(e => leader ? e.isLeader : !e.isLeader);
+  const sorted = [...pool].sort((a,b)=>a.name.localeCompare(b.name));
+  sel.innerHTML = `<option value="" disabled ${prev?'':'selected'}>Select ${leader && !admin ? 'a leader' : 'an employee'}…</option>`
     + sorted.map(e=>`<option value="${esc(e.id)}">${esc(e.name)}</option>`).join('');
   if (sorted.some(e=>e.id===prev)) sel.value = prev;
-  updateEmployeeVisibility();
+  // Re-resolve against whatever the dropdown actually ended up on: if the
+  // previous selection survived the rebuild, this re-confirms the ratee name
+  // still matches it; if the pool changed underneath it (e.g. the roster was
+  // re-imported, or switching between Admin/Leader access changes which
+  // employees are even in the list) and the old id is gone, the select falls
+  // back to its blank placeholder here — onEmployeeChange() then correctly
+  // unlocks/clears the ratee field instead of leaving it pointed at someone
+  // no longer selected.
+  onEmployeeChange();
 }
 
-// Non-admins with a roster loaded still SEE the Affiliate/Unit/Functional Group
-// fields (so it's clear what scope they're looking at) but can't touch them — those
-// three fields become a read-only, auto-filled reflection of whichever employee is
-// selected above. The only thing a non-admin picks is their name. Admins keep full
-// manual control of all three (e.g. to set up targets for a scope before anyone's
-// been assigned to it yet).
+// On the landing page, a non-admin with a roster loaded sees ONLY the Employee
+// dropdown — the Affiliate/Unit/Functional Group card is hidden entirely so there's
+// nothing there to select. Once they pick their name, that card reappears as a
+// read-only, auto-filled confirmation of their scope (never editable). Admins keep
+// full manual control of all three at all times (e.g. to set up targets for a scope
+// before anyone's been assigned to it yet).
 function updateEmployeeVisibility(){
   const hasEmployees = employees.length > 0;
   const admin = isAdmin();
   const lockScope = hasEmployees && !admin;
+  const empSel = document.getElementById('fEmployee');
+  const employeeChosen = !!(empSel && empSel.value);
 
   const employeeCard = document.getElementById('employeeCard');
   if (employeeCard) employeeCard.style.display = hasEmployees ? 'block' : 'none';
+
+  const scopeCard = document.getElementById('scopeFiltersCard');
+  if (scopeCard) scopeCard.style.display = (admin || !hasEmployees || employeeChosen) ? 'block' : 'none';
 
   const fCompany = document.getElementById('fCompany');
   const fUnit = document.getElementById('fUnit');
@@ -1227,13 +1433,25 @@ function onEmployeeChange(){
   const sel = document.getElementById('fEmployee');
   const emp = employees.find(e=>e.id===sel.value);
   const rateeInput = document.getElementById('fRateeName');
-  if (!emp){ if (rateeInput) rateeInput.readOnly = false; return; }
+  if (!emp){
+    if (rateeInput) rateeInput.readOnly = false;
+    updateEmployeeVisibility(); // back to landing state: hide the scope card again
+    return;
+  }
   selectFilterScope(emp.company, emp.businessUnit, emp.functionalUnit);
+  if (!emp.functionalUnit){
+    // Unit-level leader — Functional Group doesn't apply to them at all. The field
+    // is already locked (see updateEmployeeVisibility); just relabel its placeholder
+    // so it reads as "not applicable" instead of "pick one".
+    const fFunc = document.getElementById('fFunc');
+    if (fFunc && fFunc.options.length) fFunc.options[0].textContent = 'Not applicable (unit-level)';
+  }
   if (rateeInput){
     rateeInput.value = emp.name;
     rateeInput.readOnly = true;
     saveRateeName();
   }
+  updateEmployeeVisibility(); // reveal the now-populated scope card
   try{ localStorage.setItem(LAST_EMPLOYEE_KEY, emp.id); }catch(e){}
 }
 // Lets a returning employee land straight on their own targets instead of
@@ -1251,38 +1469,109 @@ function restoreLastEmployeeSelection(){
   onEmployeeChange();
 }
 
-function populateEmployeeModal(){
+let _editingEmployeeId = null;
+
+// Rebuilds the Affiliate dropdown from scratch (used both for a fresh "Add" and to
+// start an "Edit"), then cascades Unit/Functional Group, optionally pre-selecting
+// values passed in via prefill — same pattern the KPI entry form already uses.
+function refreshEmpDropdowns(prefill){
   const companySel = document.getElementById('empCompanySelect');
   if (!companySel) return;
   companySel.innerHTML = `<option value="">Select affiliate…</option>` + allAffiliateNames().map(c=>`<option value="${esc(c)}">${esc(c)}</option>`).join('');
-  onEmpCompanyChange();
-  renderEmployeeList();
+  if (prefill && prefill.company && [...companySel.options].some(o=>o.value===prefill.company)) companySel.value = prefill.company;
+  onEmpCompanyChange(prefill ? prefill.businessUnit : '', prefill ? prefill.functionalUnit : '');
 }
-function onEmpCompanyChange(){
+function onEmpCompanyChange(prefillUnit, prefillFunc){
   const co = document.getElementById('empCompanySelect').value;
-  document.getElementById('empUnitSelect').innerHTML = `<option value="">Select unit…</option>` + allUnitNames(co||null).map(u=>`<option value="${esc(u)}">${esc(u)}</option>`).join('');
-  onEmpUnitChange();
+  const unitSel = document.getElementById('empUnitSelect');
+  unitSel.innerHTML = `<option value="">Select unit…</option>` + allUnitNames(co||null).map(u=>`<option value="${esc(u)}">${esc(u)}</option>`).join('');
+  if (prefillUnit && [...unitSel.options].some(o=>o.value===prefillUnit)) unitSel.value = prefillUnit;
+  onEmpUnitChange(prefillFunc);
 }
-function onEmpUnitChange(){
+function onEmpUnitChange(prefillFunc){
   const co = document.getElementById('empCompanySelect').value;
   const u = document.getElementById('empUnitSelect').value;
-  document.getElementById('empFuncSelect').innerHTML = `<option value="">Select functional group…</option>` + allFuncNames(co||null, u||null).map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join('');
+  const funcSel = document.getElementById('empFuncSelect');
+  funcSel.innerHTML = `<option value="">Select functional group…</option>` + allFuncNames(co||null, u||null).map(f=>`<option value="${esc(f)}">${esc(f)}</option>`).join('');
+  if (prefillFunc && [...funcSel.options].some(o=>o.value===prefillFunc)) funcSel.value = prefillFunc;
 }
-function addSingleEmployee(){
+
+// Leaders are scoped to a Business Unit as a whole (they oversee every functional
+// group under it), so the Functional Group picker isn't needed once "This person is
+// a leader" is checked — hide it and clear whatever was selected.
+function onEmpLeaderToggle(){
+  const isLeader = document.getElementById('empIsLeader').checked;
+  const wrap = document.getElementById('empFuncWrap');
+  if (wrap) wrap.style.display = isLeader ? 'none' : 'block';
+  if (isLeader) document.getElementById('empFuncSelect').value = '';
+}
+
+function resetEmployeeForm(){
+  _editingEmployeeId = null;
+  document.getElementById('empName').value = '';
+  document.getElementById('empIsLeader').checked = false;
+  refreshEmpDropdowns(null);
+  onEmpLeaderToggle();
+  document.getElementById('empFormLabel').textContent = 'Add a single employee';
+  document.getElementById('empSaveBtn').textContent = '+ Add Employee';
+  document.getElementById('empCancelEditBtn').style.display = 'none';
+}
+
+function populateEmployeeModal(){
+  if (!document.getElementById('empCompanySelect')) return;
+  resetEmployeeForm();
+  renderEmployeeList();
+}
+
+function editEmployee(id){
+  if (!isAdmin()) return;
+  const emp = employees.find(e=>e.id===id);
+  if (!emp) return;
+  _editingEmployeeId = id;
+  document.getElementById('empName').value = emp.name;
+  document.getElementById('empIsLeader').checked = !!emp.isLeader;
+  refreshEmpDropdowns({ company: emp.company||'', businessUnit: emp.businessUnit||'', functionalUnit: emp.functionalUnit||'' });
+  onEmpLeaderToggle();
+  document.getElementById('empFormLabel').textContent = `Editing "${emp.name}"`;
+  document.getElementById('empSaveBtn').textContent = 'Save Changes';
+  document.getElementById('empCancelEditBtn').style.display = 'inline-flex';
+  document.getElementById('empName').focus();
+}
+
+function cancelEmployeeEdit(){
+  resetEmployeeForm();
+}
+
+function saveSingleEmployee(){
   if (!isAdmin()) return;
   const name = document.getElementById('empName').value.trim();
   const company = document.getElementById('empCompanySelect').value;
   const businessUnit = document.getElementById('empUnitSelect').value;
-  const functionalUnit = document.getElementById('empFuncSelect').value;
-  if (!name || !company || !businessUnit || !functionalUnit){ alert('Employee name, affiliate, unit, and functional group are all required.'); return; }
-  employees.push({ id: uid(), name, company, businessUnit, functionalUnit });
-  document.getElementById('empName').value = '';
+  const isLeader = document.getElementById('empIsLeader').checked;
+  const functionalUnit = isLeader ? '' : document.getElementById('empFuncSelect').value; // leaders: Business Unit only
+  if (!name || !company || !businessUnit || (!isLeader && !functionalUnit)){
+    alert(isLeader ? 'Employee name, affiliate, and unit are all required.' : 'Employee name, affiliate, unit, and functional group are all required.');
+    return;
+  }
+  if (_editingEmployeeId){
+    const e = employees.find(x=>x.id===_editingEmployeeId);
+    if (e) Object.assign(e, { name, company, businessUnit, functionalUnit, isLeader }); // keep id
+  } else {
+    employees.push({ id: uid(), name, company, businessUnit, functionalUnit, isLeader });
+  }
+  // Defensive: company/unit are normally picked from options the directory already
+  // has, but this guarantees the scope is registered (needed for the filter dropdowns
+  // to have a matching option) even if the directory and roster ever drift apart.
+  ensureDirectoryScope(company, businessUnit, functionalUnit);
+  saveDirectory();
   persistEmployees();
   populateEmployeeFilter();
+  resetEmployeeForm();
   renderEmployeeList();
 }
 function deleteEmployee(id){
   if (!isAdmin()) return;
+  if (_editingEmployeeId === id) resetEmployeeForm(); // don't leave the form pointed at a row that no longer exists
   employees = employees.filter(e=>e.id!==id);
   persistEmployees();
   populateEmployeeFilter();
@@ -1301,6 +1590,8 @@ function renderEmployeeList(){
   list.innerHTML = sorted.map(e=>`<div class="dir-row">
     <input type="text" value="${esc(e.name)}" readonly style="flex:1.3;">
     <input type="text" value="${esc([e.functionalUnit,e.businessUnit,e.company].filter(Boolean).join(' · '))}" readonly>
+    ${e.isLeader ? `<span class="emp-leader-badge">🎖 Leader</span>` : ''}
+    <button type="button" onclick="editEmployee('${jsStr(e.id)}')">✎ Edit</button>
     <button type="button" class="del" onclick="deleteEmployee('${jsStr(e.id)}')">🗑</button>
   </div>`).join('');
 }
@@ -1318,9 +1609,10 @@ function processEmployeeRows(rows, statusEl){
     const name = cell(row,'Employee Name');
     const company = cell(row,'Business Affiliate');
     const businessUnit = cell(row,'Business Unit');
-    const functionalUnit = cell(row,'Functional Group');
-    if (!name || !company || !businessUnit || !functionalUnit){ skipped++; return; }
-    imported.push({ id: uid(), name, company, businessUnit, functionalUnit });
+    const isLeader = isTruthyFlag(cell(row,'Leader (Yes/No)'));
+    const functionalUnit = isLeader ? '' : cell(row,'Functional Group'); // leaders: Business Unit only, no Functional Group needed
+    if (!name || !company || !businessUnit || (!isLeader && !functionalUnit)){ skipped++; return; }
+    imported.push({ id: uid(), name, company, businessUnit, functionalUnit, isLeader });
     added++;
   });
   // Re-importing the same roster (e.g. an updated headcount file) updates matching
@@ -1329,7 +1621,7 @@ function processEmployeeRows(rows, statusEl){
     const idx = employees.findIndex(e=>e.name.trim().toLowerCase()===imp.name.trim().toLowerCase());
     if (idx>=0) employees[idx] = Object.assign({}, employees[idx], imp, { id: employees[idx].id });
     else employees.push(imp);
-    ensureDirectoryScope(imp.company, imp.businessUnit, imp.functionalUnit);
+    ensureDirectoryScope(imp.company, imp.businessUnit, imp.functionalUnit); // registers Affiliate/Unit even when functionalUnit is blank (leaders)
   });
   saveDirectory();
   persistEmployees();
@@ -1373,9 +1665,9 @@ function downloadEmployeeTemplate(){
   triggerDownload(csv, 'employee_directory_template.csv');
 }
 
-function findAffiliate(name){ return directory.affiliates.find(a=>a.name===name) || null; }
-function findUnit(affName, unitName){ const a = findAffiliate(affName); return a ? (a.units.find(u=>u.name===unitName)||null) : null; }
-function findFuncGroup(affName, unitName, funcName){ const u = findUnit(affName, unitName); return u ? (u.funcGroups.find(f=>f.name===funcName)||null) : null; }
+function findAffiliate(name){ return directory.affiliates.find(a=>normKey(a.name)===normKey(name)) || null; }
+function findUnit(affName, unitName){ const a = findAffiliate(affName); return a ? (a.units.find(u=>normKey(u.name)===normKey(unitName))||null) : null; }
+function findFuncGroup(affName, unitName, funcName){ const u = findUnit(affName, unitName); return u ? (u.funcGroups.find(f=>normKey(f.name)===normKey(funcName))||null) : null; }
 
 function allAffiliateNames(){ return directory.affiliates.map(a=>a.name).sort((a,b)=>a.localeCompare(b)); }
 function allUnitNames(affName){
@@ -1394,18 +1686,24 @@ function allGoalNames(affName, unitName, funcName){
   const f = findFuncGroup(affName, unitName, funcName);
   return f ? [...f.goals] : [];
 }
-// Ensures an Affiliate → Unit → Functional Group path exists in the directory
-// (creating any missing level), and returns that functional-group node. Shared by
-// ensureDirectoryGoal (below) and the employee-roster import/add (which needs the
-// scope to exist so it shows up in the filter dropdowns even before any target
-// entries have been added under it).
+// Ensures an Affiliate → Unit path exists in the directory (creating either missing
+// level), and — only if a Functional Group name is given — ensures that too, then
+// returns that functional-group node (or null when func was blank). This is what
+// makes an Affiliate/Unit show up in the filter dropdowns at all, so it must run
+// even for Business-Unit-only scopes (Leadership Targets, leader employees) that
+// have no Functional Group — that used to bail out here before even touching the
+// Affiliate/Unit, which is exactly why a brand-new Business Unit that only ever had
+// leadership-level entries/leaders never appeared as a selectable option: nothing
+// had registered it in the directory, so selectFilterScope() had no matching
+// <option> to set and the whole scope silently failed to populate.
 function ensureDirectoryScope(company, unit, func){
-  if (!company || !unit || !func) return null;
+  if (!company || !unit) return null;
   let a = findAffiliate(company);
   if (!a){ a = { name: company, units: [] }; directory.affiliates.push(a); }
-  let u = a.units.find(x=>x.name===unit);
+  let u = a.units.find(x=>normKey(x.name)===normKey(unit));
   if (!u){ u = { name: unit, funcGroups: [] }; a.units.push(u); }
-  let f = u.funcGroups.find(x=>x.name===func);
+  if (!func) return null;
+  let f = u.funcGroups.find(x=>normKey(x.name)===normKey(func));
   if (!f){ f = { name: func, goals: [] }; u.funcGroups.push(f); }
   return f;
 }
@@ -1414,6 +1712,22 @@ function ensureDirectoryGoal(company, unit, func, goalName){
   const f = ensureDirectoryScope(company, unit, func);
   if (!f || !goalName) return;
   if (!f.goals.includes(goalName)) f.goals.push(goalName);
+}
+
+// Self-heals directory gaps left by data saved before ensureDirectoryScope() was
+// fixed to register a Business Unit even without a Functional Group. Any leader or
+// Leadership Target saved under the old logic has its Affiliate/Unit missing from
+// the directory, which means its scope has no matching <option> in the filter
+// dropdowns — selectFilterScope() silently fails to set it, and that leader's
+// targets never populate even though the entries/employee data itself is fine.
+// Re-derives every referenced (company, unit, functionalUnit) from the actual
+// entries/employees and makes sure each is present. Safe to run every load: a
+// directory that's already complete comes back unchanged.
+function repairDirectoryFromData(){
+  const before = JSON.stringify(directory);
+  entries.forEach(e => ensureDirectoryScope(e.company, e.businessUnit, e.functionalUnit));
+  employees.forEach(e => ensureDirectoryScope(e.company, e.businessUnit, e.functionalUnit));
+  return JSON.stringify(directory) !== before;
 }
 
 /* ---------- Filters (sourced from the directory, not from entries) ---------- */
@@ -1456,30 +1770,67 @@ function onUnitChange(keepFunc){
   renderGoals();
 }
 
+// A plain `select.value = x` silently fails (falls back to the first option)
+// if no <option> has that EXACT string as its value — so a casing/whitespace
+// difference between an employee's saved scope and however the dropdown's
+// options got their text can leave the dropdown looking unset even though the
+// "same" scope is right there in the list. Select whichever option matches
+// once both sides are normalized, instead of relying on an exact match.
+function setSelectValueNormalized(sel, value){
+  if (!sel) return;
+  const match = [...sel.options].find(o => normKey(o.value) === normKey(value));
+  sel.value = match ? match.value : (value || '');
+}
+
 function selectFilterScope(company, unit, func){
-  document.getElementById('fCompany').value = company || '';
+  setSelectValueNormalized(document.getElementById('fCompany'), company);
   onCompanyChange(false);
   if (unit){
-    document.getElementById('fUnit').value = unit;
+    setSelectValueNormalized(document.getElementById('fUnit'), unit);
     onUnitChange(false);
   }
   if (func){
-    document.getElementById('fFunc').value = func;
+    setSelectValueNormalized(document.getElementById('fFunc'), func);
     renderGoals();
   }
 }
 
 function getFiltered(){
   const admin = isAdmin();
+  const leader = isLeaderUnlocked();
   const company = document.getElementById('fCompany').value;
   const unit = document.getElementById('fUnit').value;
   const func = document.getElementById('fFunc').value;
-  if (!admin && (!company || !unit || !func)) return []; // non-admins must choose a specific affiliate, unit, and functional group — no "view all" mode
+  // Non-admins must always choose a specific affiliate and unit — no "view all" mode.
+  // A Functional Group is only required for regular (staff-level) targets; Leadership
+  // Targets are Business Unit-scoped, so a unit-level leader with no Functional Group
+  // assigned can still have something to see (handled per-entry below).
+  if (!admin && (!company || !unit)) return [];
   const q = (document.getElementById('fSearch').value||'').trim().toLowerCase();
   return entries.filter(e=>{
-    if (company && e.company!==company) return false;
-    if (unit && e.businessUnit!==unit) return false;
-    if (func && e.functionalUnit!==func) return false;
+    // Compared case/whitespace-insensitively: the same Affiliate/Unit/Functional
+    // Group can end up saved with slightly different capitalization or a stray
+    // space depending on whether it came from a manual form, a KPI CSV import,
+    // or an employee Excel import — a strict === here would silently exclude an
+    // entry that is, for every practical purpose, the same scope.
+    if (company && normKey(e.company)!==normKey(company)) return false;
+    if (unit && normKey(e.businessUnit)!==normKey(unit)) return false;
+    // An entry with no Functional Group is treated as Business-Unit-level
+    // (Leadership) scope even if its `audience` field wasn't explicitly set to
+    // 'leader' — e.g. an older entry, or one edited to clear its Functional
+    // Group without also re-checking the "Leadership Target" box. Relying on
+    // `audience` alone meant an Admin (who bypasses this check entirely) could
+    // see such an entry just fine, while a Leader-Access-only login — which
+    // does need this check — silently excluded it, exactly the "Admin sees it,
+    // Leader Access doesn't" gap reported.
+    const isLeadershipScoped = e.audience==='leader' || !e.functionalUnit;
+    if (isLeadershipScoped){
+      if (!admin && !leader) return false; // Leadership-scoped targets need Admin or Leader Access
+      // functionalUnit intentionally NOT checked — these apply to the whole Business Unit
+    } else {
+      if (!admin && !func) return false; // regular staff targets still need an exact Functional Group
+      if (func && normKey(e.functionalUnit)!==normKey(func)) return false;
+    }
     if (q){
       const hay = [e.strategicGoal,e.kpi,e.deliverable].join(' ').toLowerCase();
       if (!hay.includes(q)) return false;
@@ -1788,6 +2139,7 @@ function entryCardHTML(e){
   <div class="entry-card">
     <div class="entry-top">
       <div class="entry-tags">
+        ${e.audience==='leader' ? `<span class="tag leader">🎖 Leadership Target</span>` : ''}
         ${e.weight!==''&&e.weight!=null ? `<span class="tag wt">${esc(e.weight)}% weight</span>` : ''}
       </div>
       <div class="entry-kpi">${esc(e.kpi)||'KPI not set'}</div>
@@ -1853,7 +2205,7 @@ function renderGoals(){
     }
     return;
   }
-  if (!isAdmin() && (!company || !unit || !func)){
+  if (!isAdmin() && (!company || !unit)){
     goalsSummaryEl.innerHTML = '';
     content.innerHTML = employees.length ? `<div class="empty-state">
       <h3>Select your name</h3>
@@ -1988,6 +2340,19 @@ function onManualFuncChange(){
   custom.style.display = sel.value==='__custom__' ? 'block' : 'none';
 }
 
+// A Leadership Target applies to the whole Business Unit, not one Functional Group —
+// hide that field once the checkbox is on and clear whatever was in it.
+function onManualLeaderToggle(){
+  const isLeaderOnly = document.getElementById('mLeaderOnly').checked;
+  const row = document.getElementById('mFuncRow');
+  if (row) row.style.display = isLeaderOnly ? 'none' : 'block';
+  if (isLeaderOnly){
+    document.getElementById('mFuncSelect').value = '';
+    document.getElementById('mFuncCustom').style.display = 'none';
+    document.getElementById('mFuncCustom').value = '';
+  }
+}
+
 let _editingEntryId = null;
 
 function openImportModal(){ if (!isAdmin()){ toggleAdminMode(); return; } document.getElementById('importStatus').textContent=''; document.getElementById('importModal').classList.add('show'); }
@@ -2011,12 +2376,15 @@ function openManualModal(editId){
     document.getElementById('mC3').value = e.c3||'';
     document.getElementById('mC4').value = e.c4||'';
     document.getElementById('mC5').value = e.c5||'';
+    document.getElementById('mLeaderOnly').checked = e.audience==='leader';
   } else {
     document.getElementById('manualModalTitle').textContent = 'Add Reference Entry';
     document.getElementById('manualSaveBtn').textContent = 'Save Entry';
     fields.forEach(id=>document.getElementById(id).value='');
+    document.getElementById('mLeaderOnly').checked = false;
     refreshManualDropdowns(null);
   }
+  onManualLeaderToggle();
   document.getElementById('manualModal').classList.add('show');
 }
 
@@ -2042,10 +2410,11 @@ function saveManualEntry(){
   const goal = document.getElementById('mGoal').value.trim();
   const deliverable = document.getElementById('mDeliverable').value.trim();
   if (!goal || !deliverable){ alert('Strategic Goal and Deliverable are required.'); return; }
+  const isLeaderOnly = document.getElementById('mLeaderOnly').checked;
   const fields = {
     company: manualFieldValue('mCompanySelect','mCompanyCustom'),
     businessUnit: manualFieldValue('mUnitSelect','mUnitCustom'),
-    functionalUnit: manualFieldValue('mFuncSelect','mFuncCustom'),
+    functionalUnit: isLeaderOnly ? '' : manualFieldValue('mFuncSelect','mFuncCustom'), // Leadership Targets are Business Unit-scoped only
     strategicGoal: goal,
     kpi: document.getElementById('mKpi').value.trim(),
     deliverable,
@@ -2054,7 +2423,8 @@ function saveManualEntry(){
     c2: document.getElementById('mC2').value.trim(),
     c3: document.getElementById('mC3').value.trim(),
     c4: document.getElementById('mC4').value.trim(),
-    c5: document.getElementById('mC5').value.trim()
+    c5: document.getElementById('mC5').value.trim(),
+    audience: document.getElementById('mLeaderOnly').checked ? 'leader' : 'all'
   };
   if (_editingEntryId){
     const e = entries.find(x=>x.id===_editingEntryId);
@@ -2078,6 +2448,10 @@ function cell(row, key){
   const found = Object.keys(row).find(k => k.trim().toLowerCase() === key.trim().toLowerCase());
   return found ? String(row[found]||'').trim() : '';
 }
+// Accepts Yes/Y/True/1/Leader (any case) as "on" for the Leadership/Leader Yes-No columns.
+function isTruthyFlag(v){
+  return ['yes','y','true','1','leader'].includes(String(v||'').trim().toLowerCase());
+}
 
 function processRows(rows, statusEl){
   let added = 0, skipped = 0;
@@ -2086,11 +2460,12 @@ function processRows(rows, statusEl){
     const goal = cell(row,'Strategic Goal');
     const deliverable = cell(row,'Deliverable');
     if (!goal || !deliverable){ skipped++; return; }
+    const isLeaderTarget = isTruthyFlag(cell(row,'Leadership Target (Yes/No)'));
     imported.push({
       id: uid(),
       company: cell(row,'Company'),
       businessUnit: cell(row,'Business Unit'),
-      functionalUnit: cell(row,'Functional Unit'),
+      functionalUnit: isLeaderTarget ? '' : cell(row,'Functional Unit'), // Leadership Targets are Business Unit-scoped only
       strategicGoal: goal,
       kpi: cell(row,'KPI'),
       deliverable,
@@ -2100,6 +2475,7 @@ function processRows(rows, statusEl){
       c3: cell(row,'Criteria L3 - Meets Expectations'),
       c4: cell(row,'Criteria L4 - Exceeds Expectations'),
       c5: cell(row,'Criteria L5 - Outstanding'),
+      audience: isLeaderTarget ? 'leader' : 'all',
       rating: (function(){ const r = parseInt(cell(row,'Rating (1-5)'),10); return (r>=1&&r<=5) ? r : null; })(),
       remarks: cell(row,'Remarks / Evidence')
     });
@@ -2156,6 +2532,7 @@ function exportCSV(){
   const rows = entries.map(e=>[
     e.company||'', e.businessUnit||'', e.functionalUnit||'', e.strategicGoal||'', e.kpi||'',
     e.deliverable||'', e.weight!=null?e.weight:'', e.c1||'', e.c2||'', e.c3||'', e.c4||'', e.c5||'',
+    e.audience==='leader' ? 'Yes' : 'No',
     e.rating||'', e.remarks||''
   ]);
   const csv = Papa.unparse([headers, ...rows]);
@@ -2215,10 +2592,12 @@ document.addEventListener('DOMContentLoaded', function(){
   loadDirectory();
   loadEmployees();
   loadRateeName();
+  if (repairDirectoryFromData()) saveDirectory(); // fix up any pre-existing leader/leadership-target scope gaps
   populateFilters();
   restoreLastEmployeeSelection();
   renderGoals();
   applyAdminUI();
+  applyLeaderUI();
   updateSyncBadge(firebaseReady() ? 'syncing' : 'unconfigured');
   pullFromCloud(); // pulls the latest shared copy in the background; falls back to the local copy above if offline/unconfigured
   startRealtimeSync(); // keeps this tab live-updated whenever another device saves changes
