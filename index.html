@@ -222,6 +222,12 @@ input[type=file]{display:none;}
 .wa-badge.wa-short{color:var(--l2);border-color:var(--l2);background:#fdf1e6;}
 .wa-badge.wa-over{color:var(--l1);border-color:var(--l1);background:#fbeae7;}
 .wa-badge.wa-none{color:var(--text3);border-color:var(--border2);background:var(--card2);}
+.wa-badge.wa-share{color:var(--navy);border-color:var(--gold2);background:#fbf3dc;}
+.overall-weight-banner{
+  display:flex;align-items:center;justify-content:space-between;gap:12px;flex-wrap:wrap;
+  padding:10px 0 14px;margin-bottom:4px;border-bottom:1px solid var(--border2);
+}
+.overall-weight-banner .owb-label{font-family:'JetBrains Mono',monospace;font-size:.66em;letter-spacing:.1em;text-transform:uppercase;color:var(--text3);}
 .goals-summary{
   background:var(--card);border:1px solid var(--border);border-radius:var(--radius);
   padding:18px 22px 8px;margin-bottom:28px;
@@ -2081,8 +2087,6 @@ function setRemarks(id, value){
 }
 
 // Sums the raw Weight (%) values assigned to a group of targets — no rating involved.
-// Used to flag whether a strategic goal's targets add up to 100% of that goal, are
-// under-allocated (falls short), or over-allocated (exceeds), regardless of ratings.
 function computeWeightAllocation(list){
   let total = 0, unset = 0;
   list.forEach(e=>{
@@ -2093,6 +2097,11 @@ function computeWeightAllocation(list){
   return { total, unset, count:list.length };
 }
 
+// The 100% check applies to the WHOLE scope (every target currently in view, regardless of
+// which Strategic Goal it belongs to) — not per goal. A single Strategic Goal's targets are only
+// ever a SHARE of that overall 100% (e.g. 65%), never required to sum to 100% on their own; see
+// goalWeightShareBadge below for that per-goal figure. Call this with the full filtered list to
+// flag whether targets across every goal collectively meet, fall short of, or exceed 100%.
 function weightAllocationBadge(list){
   const { total, unset } = computeWeightAllocation(list);
   const rounded = Math.round(total*10)/10;
@@ -2107,6 +2116,20 @@ function weightAllocationBadge(list){
     return `<span class="wa-badge wa-short">${rounded}% allocated · falls short by ${(100-total).toFixed(1)}%${unsetNote}</span>`;
   }
   return `<span class="wa-badge wa-over">${rounded}% allocated · exceeds by ${(total-100).toFixed(1)}%${unsetNote}</span>`;
+}
+
+// How much of the overall 100% a single Strategic Goal's targets account for — e.g. "65% of
+// total weight" when that goal's targets are weighted 25+25+15. Informational only, not a
+// pass/fail check (unlike weightAllocationBadge above) — a goal legitimately can and usually
+// will be less than 100% of the whole scope on its own.
+function goalWeightShareBadge(goalList){
+  const { total, unset } = computeWeightAllocation(goalList);
+  if (unset === goalList.length){
+    return `<span class="wa-badge wa-none">No weights set</span>`;
+  }
+  const rounded = Math.round(total*10)/10;
+  const unsetNote = unset ? ` · ${unset} target${unset===1?'':'s'} unweighted` : '';
+  return `<span class="wa-badge wa-share">${rounded}% of total weight${unsetNote}</span>`;
 }
 
 function computeWeightedOverall(list){
@@ -2244,7 +2267,17 @@ function renderGoals(){
     orderedGoalKeys = Object.keys(groups).sort((a,b)=>a.localeCompare(b));
   }
 
+  // Overall weight check now applies to the WHOLE scope (every target in view, regardless of
+  // which Strategic Goal it's under) — the 100% target is across all goals combined, not
+  // per goal. Shown once at the top of this summary, plus mirrored in the header next to the
+  // deliverable count (scopeOverallEl below) so it's visible without scrolling.
+  const overallWeightHTML = weightAllocationBadge(filtered);
+
   goalsSummaryEl.innerHTML = `<div class="goals-summary">
+    <div class="overall-weight-banner">
+      <span class="owb-label">Overall Weight Allocation (All Strategic Goals)</span>
+      ${overallWeightHTML}
+    </div>
     <div class="goals-summary-title">Strategic Goals Summary</div>
     ${orderedGoalKeys.map(g=>{
       const overall = computeGoalOverall(groups[g]);
@@ -2254,7 +2287,7 @@ function renderGoals(){
       return `<div class="goals-summary-row">
         <span class="goals-summary-name">${esc(g)}</span>
         <span style="display:flex;align-items:center;gap:8px;flex-wrap:wrap;">
-          ${weightAllocationBadge(groups[g])}
+          ${goalWeightShareBadge(groups[g])}
           ${scoreHTML}
         </span>
       </div>`;
@@ -2266,9 +2299,10 @@ function renderGoals(){
   // weight% earned per target, rolled up across every strategic goal currently in view —
   // a goal with more total weight naturally moves this number more than a lighter one.
   const scopeOverall = computeScopeOverall(filtered);
-  scopeOverallEl.innerHTML = (scopeOverall && scopeOverall.ratedCount>0)
+  const scopeScoreHTML = (scopeOverall && scopeOverall.ratedCount>0)
     ? `<span class="goal-overall">${scopeOverall.pct.toFixed(1)}% of goal earned · <strong>${scopeOverall.avg.toFixed(2)}/5</strong> avg · ${scopeOverall.ratedCount}/${scopeOverall.total} targets rated</span>`
     : `<span class="goal-overall no-data">Not yet rated</span>`;
+  scopeOverallEl.innerHTML = `${overallWeightHTML} ${scopeScoreHTML}`;
 
   content.innerHTML = orderedGoalKeys.map(g=>{
     return `<div class="goal-section">
@@ -2276,7 +2310,7 @@ function renderGoals(){
         <span class="goal-chip">Strategic Goal</span>
         <h3>${esc(g)}</h3>
         <div class="line"></div>
-        ${weightAllocationBadge(groups[g])}
+        ${goalWeightShareBadge(groups[g])}
       </div>
       ${groups[g].map(entryCardHTML).join('')}
     </div>`;
