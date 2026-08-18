@@ -2279,7 +2279,7 @@ function computeScopeOverall(list){ return computeWeightedOverall(list); }
 function entryCardHTML(e){
   const cells = [e.c1,e.c2,e.c3,e.c4,e.c5];
   return `
-  <div class="entry-card">
+  <div class="entry-card" data-id="${esc(e.id)}">
     <div class="entry-top">
       <div class="entry-tags">
         ${e.audience==='leader' ? `<span class="tag leader">🎖 Leadership Target</span>` : ''}
@@ -2315,10 +2315,44 @@ function entryCardHTML(e){
 // delete looked like it hadn't taken effect until scrolling back down to
 // check. Wrapping the real work and restoring scroll position afterward
 // keeps the correctness of a full rebuild without that jarring reset.
+// The masthead (and, at narrower widths, the filter rail) are `position:sticky`
+// and can end up 150-300px tall once the sync banner / admin button rows are
+// showing — tall enough to visually and physically COVER whatever entry card
+// happens to scroll to the very top of the page. Restoring the exact old pixel
+// scrollY (the previous approach) doesn't account for that: deleting/rating a
+// target changes the total page height, so "the same scrollY" can land a
+// DIFFERENT card in that dead zone than before — which looks exactly like
+// "I can't click the next goal", because the click is actually landing on the
+// opaque header sitting on top of it, not the button underneath.
+// Anchoring on a specific entry card that (a) survives the mutation and (b)
+// was genuinely visible (below the header) beforehand, then re-scrolling so
+// THAT card ends up at the exact same viewport position, keeps every other
+// card's on-screen position stable across the edit — nothing the user was
+// looking at jumps into the hidden strip behind the header.
 function renderGoals(){
+  const masthead = document.querySelector('.masthead');
+  const mastheadH = masthead ? masthead.getBoundingClientRect().bottom : 0;
+  const oldCards = [...document.querySelectorAll('.entry-card[data-id]')];
+  let anchorId = null, anchorTop = null;
+  for (const card of oldCards){
+    const id = card.getAttribute('data-id');
+    if (!entries.some(e=>e.id===id)) continue; // this one's being removed by the current mutation — not a safe anchor
+    const r = card.getBoundingClientRect();
+    if (r.bottom > mastheadH){ anchorId = id; anchorTop = r.top; break; } // first card not hidden behind the sticky header
+  }
   const _scrollY = window.scrollY;
   renderGoalsInner();
-  requestAnimationFrame(()=>{ window.scrollTo(0, _scrollY); });
+  requestAnimationFrame(()=>{
+    if (anchorId){
+      const newCard = document.querySelector(`.entry-card[data-id="${CSS.escape(anchorId)}"]`);
+      if (newCard){
+        const delta = newCard.getBoundingClientRect().top - anchorTop;
+        if (delta) window.scrollBy(0, delta);
+        return;
+      }
+    }
+    window.scrollTo(0, _scrollY); // fallback for the rare case there's nothing usable to anchor on (e.g. empty-state views)
+  });
 }
 
 function renderGoalsInner(){
