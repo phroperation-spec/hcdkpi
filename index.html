@@ -861,15 +861,23 @@ function applyRemoteData(data){
 
 async function pullFromCloud(){
   if (!firebaseReady()){ updateSyncBadge('unconfigured'); resolveAwaitingCloud(); return; }
+  // If an import/edit is still waiting to reach the cloud (e.g. its push failed
+  // earlier, or hasn't fired yet), fetching a read is the wrong move — it can
+  // never do anything but confirm the cloud is stale, and it used to just bail
+  // out here leaving the badge stuck on "Syncing…" forever with the actual
+  // change never retried. Send the pending change instead; that's what
+  // actually needs to happen.
+  if (hasUnsyncedLocalChanges()){ resolveAwaitingCloud(); return pushToCloud(); }
   updateSyncBadge('syncing');
   await ensureFirebaseAuth(); // don't attempt a read until we're signed in, or the DB rules will reject it
   try{
     const snap = await _fbRef.once('value');
     if (hasUnsyncedLocalChanges()){
-      // A local edit landed while this pull was in flight — leave it alone,
-      // it'll be pushed shortly and the badge will update again then.
+      // A local edit landed while this pull was in flight — that edit takes
+      // priority over whatever we just read, so send it rather than leaving
+      // it stranded (and leave the badge to whatever pushToCloud sets it to).
       resolveAwaitingCloud();
-      return;
+      return pushToCloud();
     }
     applyRemoteData(snap.val());
     resolveAwaitingCloud();
@@ -882,6 +890,28 @@ async function pullFromCloud(){
     resolveAwaitingCloud();
     updateSyncBadge('offline');
   }
+}
+
+// If a push fails (dropped connection, a mobile network blip, the Firebase SDK
+// not being fully loaded yet, etc.) the edit stays flagged as unsynced
+// (hasUnsyncedLocalChanges() stays true) but nothing was ever automatically
+// retrying it — the person had to notice the small badge had gone red/orange
+// and click it themselves, and even then the old manualSync() only pulled
+// (see above), never actually resent the failed write. That combination is
+// exactly how an import could look "successful" in the browser that made it,
+// yet silently never actually reach the shared cloud copy for anyone else
+// (or this same person on another device) to see. _retryPushTimer below keeps
+// nudging a failed push back in on its own, with simple backoff, until it
+// clears or a fresh edit reschedules it.
+let _retryPushTimer = null;
+let _retryPushDelay = 5000;
+const RETRY_PUSH_MAX_DELAY = 60000;
+function scheduleRetryPush(){
+  clearTimeout(_retryPushTimer);
+  _retryPushTimer = setTimeout(()=>{
+    if (hasUnsyncedLocalChanges()) pushToCloud();
+  }, _retryPushDelay);
+  _retryPushDelay = Math.min(_retryPushDelay * 2, RETRY_PUSH_MAX_DELAY);
 }
 
 async function pushToCloud(){
@@ -908,12 +938,15 @@ async function pushToCloud(){
     await _fbRef.set(payload);
     _syncedChangeSeq = seqAtPush; // safe again to accept remote snapshots, unless another edit happened meanwhile
     _lastSyncError = null;
+    clearTimeout(_retryPushTimer);
+    _retryPushDelay = 5000; // reset backoff now that a push actually succeeded
     try{ localStorage.setItem(LOCAL_UPDATED_KEY, String(payload.updatedAt)); }catch(e){}
     updateSyncBadge('synced', new Date(payload.updatedAt).toLocaleTimeString());
   }catch(err){
     console.warn('Cloud sync (push) failed:', err);
     _lastSyncError = errText(err);
     updateSyncBadge('offline');
+    scheduleRetryPush(); // don't strand this edit — keep trying until it lands or a newer edit supersedes it
   }
 }
 
@@ -942,6 +975,11 @@ function manualSync(){
       + (_lastSyncError ? `\n\nLast error: ${_lastSyncError}` : ''));
     return;
   }
+  // Anything imported/edited but not yet confirmed on the cloud takes priority
+  // to send — pullFromCloud() now does this automatically too, but resolving
+  // it here means clicking the badge always does the thing the person actually
+  // wants (get MY change up there), not a read that can't help while one is pending.
+  if (hasUnsyncedLocalChanges()){ pushToCloud(); return; }
   pullFromCloud();
 }
 
@@ -961,6 +999,18 @@ window.addEventListener('beforeunload', function(e){
     e.preventDefault();
     e.returnValue = '';
   }
+});
+
+// Connectivity/tab-focus recovery: a push that failed because the network was
+// briefly down (the most common real-world cause of "I imported it but it
+// never showed up elsewhere") should retry the moment the network — or this
+// tab — comes back, not wait for scheduleRetryPush()'s backoff timer or for
+// the person to notice the badge and click it.
+window.addEventListener('online', function(){
+  if (hasUnsyncedLocalChanges()) pushToCloud();
+});
+document.addEventListener('visibilitychange', function(){
+  if (document.visibilityState === 'visible' && hasUnsyncedLocalChanges()) pushToCloud();
 });
 
 const SAMPLE_ENTRIES = [
