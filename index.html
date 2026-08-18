@@ -715,6 +715,7 @@ function firebaseReady(){
     if (!firebase.apps || !firebase.apps.length) firebase.initializeApp(FIREBASE_CONFIG);
     _fbRef = firebase.database().ref(FIREBASE_SYNC_PATH);
     ensureFirebaseAuth(); // kick off anonymous sign-in in the background; every read/write below awaits it first
+    retryStuckSyncOnceAuthed(); // once that sign-in actually lands (even if it was slow), catch up anything a caller gave up waiting on
     return true;
   }catch(err){
     console.warn('Firebase init failed:', err);
@@ -745,6 +746,38 @@ function ensureFirebaseAuth(){
     });
   });
   return _authPromise;
+}
+
+// A flaky connection can drop a request without ever erroring it out — the
+// signInAnonymously()/onAuthStateChanged() callbacks above then simply never
+// fire, so `await ensureFirebaseAuth()` (and everything waiting on it below)
+// hangs forever instead of failing. Since the very first thing this app does
+// is wait on the cloud before showing anything (see loadData()/awaitingCloud),
+// that hang looked exactly like "the platform is frozen — I can't click
+// anything." withTimeout() bounds how long anything here waits before moving
+// on; it never touches `_authPromise` itself, so if the real sign-in/read
+// does complete later, it's still recorded correctly for whoever asks next.
+function withTimeout(promise, ms){
+  return new Promise((resolve, reject)=>{
+    let settled = false;
+    promise.then(v=>{ if(!settled){ settled=true; resolve(v); } }, e=>{ if(!settled){ settled=true; reject(e); } });
+    setTimeout(()=>{ if(!settled){ settled=true; reject(new Error(`Timed out after ${ms/1000}s waiting for the cloud`)); } }, ms);
+  });
+}
+const CLOUD_TIMEOUT_MS = 9000;
+
+// If a caller above gave up on auth because it was just slow (not genuinely
+// failed) and the real sign-in completes moments later, nothing was ever
+// retrying whatever got shelved — the person had to notice and click Sync
+// themselves. This makes that recovery automatic: once real auth resolves,
+// re-check every stuck condition and resolve it.
+function retryStuckSyncOnceAuthed(){
+  ensureFirebaseAuth().then(ok=>{
+    if (!ok) return;
+    if (awaitingCloud) pullFromCloud();
+    if (hasUnsyncedLocalChanges()) pushToCloud();
+    startRealtimeSync();
+  });
 }
 
 function errText(err){
@@ -859,6 +892,17 @@ function applyRemoteData(data){
   return changed;
 }
 
+let _pullRetryTimer = null;
+let _pullRetryDelay = 4000;
+const PULL_RETRY_MAX_DELAY = 30000;
+let _awaitingCloudSince = 0; // when this device first started waiting on a first-ever cloud pull
+const AWAITING_CLOUD_GRACE_MS = 20000; // don't give up and show sample data on the first hiccup — give it a fair chance first
+function scheduleRetryPull(){
+  clearTimeout(_pullRetryTimer);
+  _pullRetryTimer = setTimeout(pullFromCloud, _pullRetryDelay);
+  _pullRetryDelay = Math.min(_pullRetryDelay * 2, PULL_RETRY_MAX_DELAY);
+}
+
 async function pullFromCloud(){
   if (!firebaseReady()){ updateSyncBadge('unconfigured'); resolveAwaitingCloud(); return; }
   // If an import/edit is still waiting to reach the cloud (e.g. its push failed
@@ -868,10 +912,15 @@ async function pullFromCloud(){
   // change never retried. Send the pending change instead; that's what
   // actually needs to happen.
   if (hasUnsyncedLocalChanges()){ resolveAwaitingCloud(); return pushToCloud(); }
+  if (awaitingCloud && !_awaitingCloudSince) _awaitingCloudSince = Date.now();
   updateSyncBadge('syncing');
-  await ensureFirebaseAuth(); // don't attempt a read until we're signed in, or the DB rules will reject it
   try{
-    const snap = await _fbRef.once('value');
+    // Bounded: a dropped request can leave sign-in or the read itself pending
+    // forever rather than erroring out. Since nothing renders until this
+    // resolves on a brand-new device (see loadData()/awaitingCloud), an
+    // unbounded hang here looked exactly like "the whole platform is frozen."
+    await withTimeout(ensureFirebaseAuth(), CLOUD_TIMEOUT_MS).catch(()=>{}); // proceed regardless — a bad/expired auth surfaces via the read failing below anyway
+    const snap = await withTimeout(_fbRef.once('value'), CLOUD_TIMEOUT_MS);
     if (hasUnsyncedLocalChanges()){
       // A local edit landed while this pull was in flight — that edit takes
       // priority over whatever we just read, so send it rather than leaving
@@ -881,14 +930,27 @@ async function pullFromCloud(){
     }
     applyRemoteData(snap.val());
     resolveAwaitingCloud();
+    clearTimeout(_pullRetryTimer);
+    _pullRetryDelay = 4000; // reset backoff now that a pull actually succeeded
+    _awaitingCloudSince = 0;
     _lastSyncError = null;
     const stamp = _lastKnownUpdatedAt ? new Date(_lastKnownUpdatedAt).toLocaleTimeString() : '';
     updateSyncBadge('synced', stamp);
   }catch(err){
     console.warn('Cloud sync (pull) failed — using local copy:', err);
     _lastSyncError = errText(err);
-    resolveAwaitingCloud();
     updateSyncBadge('offline');
+    if (awaitingCloud && (Date.now() - _awaitingCloudSince) < AWAITING_CLOUD_GRACE_MS){
+      // Still within the very first stretch of a brand-new device's first
+      // load — keep quietly retrying instead of immediately concluding "the
+      // cloud has nothing" and seeding sample data over what might just be a
+      // slow connection (that's the exact "resets to placeholder companies"
+      // failure mode this app was already built to avoid elsewhere).
+      scheduleRetryPull();
+      return;
+    }
+    resolveAwaitingCloud();
+    scheduleRetryPull(); // keep trying quietly in the background so real data can still take over once reachable
   }
 }
 
@@ -923,8 +985,8 @@ async function pushToCloud(){
     return;
   }
   updateSyncBadge('syncing');
-  await ensureFirebaseAuth(); // don't attempt a write until we're signed in, or the DB rules will reject it
   try{
+    await withTimeout(ensureFirebaseAuth(), CLOUD_TIMEOUT_MS).catch(()=>{}); // don't hang forever on auth — a bad/expired sign-in surfaces via the write failing below anyway
     const payload = {
       entries,
       directory,
@@ -935,7 +997,7 @@ async function pushToCloud(){
     };
     const seqAtPush = _localChangeSeq; // whatever's in `entries`/`directory`/`employees` right now is about to be sent
     _lastKnownUpdatedAt = payload.updatedAt; // set before the write so our own echo is recognized and skipped
-    await _fbRef.set(payload);
+    await withTimeout(_fbRef.set(payload), CLOUD_TIMEOUT_MS);
     _syncedChangeSeq = seqAtPush; // safe again to accept remote snapshots, unless another edit happened meanwhile
     _lastSyncError = null;
     clearTimeout(_retryPushTimer);
@@ -952,9 +1014,12 @@ async function pushToCloud(){
 
 // Live cross-device sync: any other device's write shows up here within moments,
 // without anyone needing to click the sync button.
+let _realtimeSyncAttached = false;
 async function startRealtimeSync(){
-  if (!firebaseReady()) return;
-  await ensureFirebaseAuth(); // don't attach the listener until we're signed in, or the DB rules will reject it
+  if (!firebaseReady() || _realtimeSyncAttached) return;
+  await withTimeout(ensureFirebaseAuth(), CLOUD_TIMEOUT_MS).catch(()=>{}); // don't hang forever on auth — retryStuckSyncOnceAuthed() re-attempts once real sign-in lands
+  if (_realtimeSyncAttached) return; // could have been attached by a concurrent call while the auth wait above was pending
+  _realtimeSyncAttached = true;
   _fbRef.on('value', snap => {
     const data = snap.val();
     if (!data || data.updatedAt === _lastKnownUpdatedAt) return; // ignore our own echo / empty node
@@ -962,10 +1027,15 @@ async function startRealtimeSync(){
     _lastSyncError = null;
     updateSyncBadge('synced', new Date(data.updatedAt).toLocaleTimeString());
   }, err => {
-    // .on() failures (e.g. rules revoked mid-session) previously vanished into the console only.
+    // .on() failures (e.g. rules revoked mid-session, or the auth wait above
+    // timed out and this attached before a real sign-in was ready) previously
+    // vanished into the console only. Firebase itself detaches the listener
+    // when this fires, so un-flag it too — otherwise a later, successful
+    // sign-in would see _realtimeSyncAttached still true and never retry.
     console.warn('Cloud sync (live listener) failed:', err);
     _lastSyncError = errText(err);
     updateSyncBadge('offline');
+    _realtimeSyncAttached = false;
   });
 }
 
@@ -2237,7 +2307,21 @@ function entryCardHTML(e){
   </div>`;
 }
 
+// Every mutation (rate a target, delete one, import a batch) re-renders this
+// whole section by replacing innerHTML wholesale — simplest way to keep it
+// correct, but on a long list it also silently yanked the page back to the
+// top on every single click. That reads as "the platform doesn't respond" —
+// a rating click looked like it did nothing (the page just jumped), and a
+// delete looked like it hadn't taken effect until scrolling back down to
+// check. Wrapping the real work and restoring scroll position afterward
+// keeps the correctness of a full rebuild without that jarring reset.
 function renderGoals(){
+  const _scrollY = window.scrollY;
+  renderGoalsInner();
+  requestAnimationFrame(()=>{ window.scrollTo(0, _scrollY); });
+}
+
+function renderGoalsInner(){
   const filtered = getFiltered();
   const content = document.getElementById('content');
   document.getElementById('mainHeadCount').textContent = filtered.length ? `${filtered.length} deliverable${filtered.length===1?'':'s'}` : '';
@@ -2484,7 +2568,15 @@ function deleteEntry(id){
   if (!confirm(`Delete this deliverable?\n\n"${(e.deliverable||'').substring(0,80)}"\n\nThis can't be undone.`)) return;
   entries = entries.filter(x=>x.id!==id);
   persist();
-  populateFilters();
+  // Deleting a target only ever touches `entries` — it can't add/remove a
+  // Company, Unit, Functional Group, or Employee — so there is no reason to
+  // rebuild those dropdowns. populateFilters() used to run here anyway, and
+  // because it cascades through onEmployeeChange()/selectFilterScope() it
+  // briefly cleared and reselected the Unit/Functional Group filters as a
+  // side effect, causing 2-3 extra renders (one of them empty) before
+  // settling back on the right view. That's exactly what made a delete look
+  // like it hadn't taken effect until switching to a different employee and
+  // back — this only needs the one direct re-render, same as rating a target.
   renderGoals();
 }
 function closeModal(id){ document.getElementById(id).classList.remove('show'); }
