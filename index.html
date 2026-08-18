@@ -859,7 +859,7 @@ function applyRemoteData(data){
     changed = true;
   }
   if (data && data.directory && Array.isArray(data.directory.affiliates)){
-    directory = data.directory;
+    directory = normalizeDirectoryShape(data.directory);
     localStorage.setItem(DIRECTORY_KEY, JSON.stringify(directory));
     changed = true;
   }
@@ -1446,14 +1446,31 @@ function defaultDirectory(){ return buildDirectoryFromList(SAMPLE_ENTRIES); }
 // later the debounced push fired and overwrote the shared cloud copy with that sample
 // data. That's exactly the "resets to the built-in sample of companies and targets"
 // bug, and it could be triggered just by opening the page fresh on any new device.
+// Repairs the funcGroups shape so every node is always { name, goals: [array] } —
+// older data (or a cloud snapshot saved before this shape existed) can have
+// funcGroups as plain strings, or objects with a missing/non-array `goals`, either
+// of which crashes `[...f.goals]` in allGoalNames() with "f.goals is not iterable"
+// the moment that scope is rendered. loadDirectory() used to run this migration
+// only on the LOCAL localStorage copy; applyRemoteData() then assigned the cloud's
+// `directory` straight in with no repair at all, so any device that received an
+// unmigrated directory from the cloud (e.g. right after a sync) would crash on
+// every functional group that came down in the old shape — looked exactly like
+// "the deliverable list won't populate" / "I can't select any functional group."
+function normalizeDirectoryShape(dir){
+  if (!dir || !Array.isArray(dir.affiliates)) return dir;
+  dir.affiliates.forEach(a=>(a.units||[]).forEach(u=>{
+    u.funcGroups = (u.funcGroups||[]).map(f=> typeof f==='string'
+      ? { name:f, goals:[] }
+      : { name:f.name, goals:Array.isArray(f.goals) ? f.goals : [] });
+  }));
+  return dir;
+}
+
 function loadDirectory(){
   try{
     const saved = JSON.parse(localStorage.getItem(DIRECTORY_KEY)||'null');
     if (saved && Array.isArray(saved.affiliates)){
-      // migrate older directories where funcGroups were plain strings
-      saved.affiliates.forEach(a=>a.units.forEach(u=>{
-        u.funcGroups = (u.funcGroups||[]).map(f=> typeof f==='string' ? { name:f, goals:[] } : { name:f.name, goals:f.goals||[] });
-      }));
+      normalizeDirectoryShape(saved);
       directory = saved;
       return;
     }
@@ -1810,7 +1827,7 @@ function allFuncNames(affName, unitName){
 // Strategic Goal order is only meaningful within one fully-scoped Affiliate → Unit → Functional Group; returns the saved custom sequence (not alphabetized).
 function allGoalNames(affName, unitName, funcName){
   const f = findFuncGroup(affName, unitName, funcName);
-  return f ? [...f.goals] : [];
+  return (f && Array.isArray(f.goals)) ? [...f.goals] : [];
 }
 // Ensures an Affiliate → Unit path exists in the directory (creating either missing
 // level), and — only if a Functional Group name is given — ensures that too, then
@@ -1837,6 +1854,7 @@ function ensureDirectoryScope(company, unit, func){
 function ensureDirectoryGoal(company, unit, func, goalName){
   const f = ensureDirectoryScope(company, unit, func);
   if (!f || !goalName) return;
+  if (!Array.isArray(f.goals)) f.goals = [];
   if (!f.goals.includes(goalName)) f.goals.push(goalName);
 }
 
